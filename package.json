@@ -1,14 +1,14 @@
 {
   "name": "carboncommander",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "main": "src/carbon-commander.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "node build.js",
     "lint": "echo \"Add your preferred linter configuration\"",
     "prepare": "npm run build",
-    "version": "npm run build && git add -A dist",
-    "postversion": "git push && git push --tags"
+    "version": "npm run build && git add -A . && git add dist -f",
+    "postversion": "echo \"Ready to push! Review and then run: git push && git push --tags\""
   },
   "author": "Carbonitex [Matt]",
   "license": "LGPL-3.0",
