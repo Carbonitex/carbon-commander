@@ -1,0 +1,46 @@
+{
+  "name": "carboncommander",
+  "version": "0.1.0",
+  "main": "src/carbon-commander.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "node build.js",
+    "lint": "echo \"Add your preferred linter configuration\"",
+    "prepare": "npm run build",
+    "version": "npm run build && git add -A dist",
+    "postversion": "git push && git push --tags"
+  },
+  "author": "Carbonitex [Matt]",
+  "license": "LGPL-3.0",
+  "description": "A command palette interface for quick actions",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/carbonitex/carbon-commander.git"
+  },
+  "keywords": [
+    "chrome-extension",
+    "command-palette",
+    "ai",
+    "ollama",
+    "openai",
+    "productivity"
+  ],
+  "bugs": {
+    "url": "https://github.com/carbonitex/carbon-commander/issues"
+  },
+  "homepage": "https://github.com/carbonitex/carbon-commander#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {
+    "marked": "^15.0.6"
+  },
+  "devDependencies": {
+    "archiver": "^7.0.1",
+    "css-loader": "^7.1.2",
+    "fs-extra": "^11.3.0",
+    "style-loader": "^4.0.0",
+    "webpack": "^5.97.1",
+    "webpack-cli": "^5.1.4"
+  }
+}
