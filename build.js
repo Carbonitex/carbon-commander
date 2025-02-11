@@ -27,7 +27,7 @@ async function packageExtension() {
         await fs.copy(srcDir, buildDir);
 
 
-        // remove smartbar.js from the build directory as it is built by webpack
+        // remove carbon-commander.js from the build directory as it is built by webpack
         await fs.remove(path.join(buildDir, 'carbon-commander.js'));
 
 

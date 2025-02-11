@@ -234,7 +234,7 @@ class GeneralTools {
                 // Add the message listener
                 window.addEventListener('message', messageHandler);
 
-                // Send message to smartbar to show confirmation dialog
+                // Send message to command bar to show confirmation dialog
                 window.postMessage({
                     type: 'SHOW_CONFIRMATION_DIALOG',
                     payload: {
@@ -301,7 +301,7 @@ class GeneralTools {
                 // Add the message listener
                 window.addEventListener('message', messageHandler);
 
-                // Send message to smartbar to show input dialog
+                // Send message to command bar to show input dialog
                 window.postMessage({
                     type: 'SHOW_INPUT_DIALOG',
                     payload: {

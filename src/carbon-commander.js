@@ -191,7 +191,7 @@ class CarbonCommander {
     }
   
     setupEventListeners() {
-      // Update keyboard shortcut to properly toggle the smartbar
+      // Update keyboard shortcut to properly toggle the command bar
       document.addEventListener('keydown', (e) => {
           // Check for Ctrl+K or Cmd+K (on Mac)
           if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -354,7 +354,7 @@ class CarbonCommander {
         return `
             <div class="cc-no-provider">
                 <h3>No AI Provider Available</h3>
-                <p>To use the smart bar, you'll need to set up one of these AI providers:</p>
+                <p>To use the command bar, you'll need to set up one of these AI providers:</p>
                 
                 <div class="provider-section">
                     <h4>OpenAI</h4>
@@ -1307,11 +1307,6 @@ function importAll(r) {
 
 importAll(require.context('./tools', true, /\.js$/));
 
-let currentApp = 'Unknown Site';
-
-if (document.getElementsByTagName('html')[0]?.getAttributeNode('ng-app')?.value == 'smartermail')
-  currentApp = 'SmarterMail';
-
-const carbonCommander = new CarbonCommander(currentApp);
+const carbonCommander = new CarbonCommander();
 
 window.carbonCommander = carbonCommander;
