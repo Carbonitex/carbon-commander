@@ -12,6 +12,68 @@ A powerful command palette interface for Chrome with AI-powered tools and extens
 - 🔄 Smart context-aware suggestions and autocomplete
 - 📚 Comprehensive help system and documentation built into the extension
 
+## Prerequisites Guide (for Beginners)
+
+If you're new to coding, you'll need to set up a few tools first. Don't worry, we'll walk you through it!
+
+### 1. Installing Node.js and npm
+
+Node.js is a runtime environment that lets you run JavaScript code, and npm (Node Package Manager) comes with it.
+
+1. **Download Node.js**:
+   - Go to [Node.js website](https://nodejs.org/)
+   - Download the "LTS" (Long Term Support) version
+   - It's the one on the left that says "Recommended For Most Users"
+
+2. **Install Node.js**:
+   - Windows: Run the downloaded `.msi` file and follow the installation wizard
+   - Mac: Run the downloaded `.pkg` file and follow the installation wizard
+   - Linux: Use your package manager (e.g., `sudo apt install nodejs npm` for Ubuntu)
+
+3. **Verify Installation**:
+   - Open Terminal (Mac/Linux) or Command Prompt (Windows)
+   - Type `node --version` and press Enter
+   - Type `npm --version` and press Enter
+   - If you see version numbers, you're good to go!
+
+### 2. Installing Git
+
+Git helps you download and update the code.
+
+1. **Download Git**:
+   - Windows: Download from [Git for Windows](https://gitforwindows.org/)
+   - Mac: It might already be installed. If not, it will prompt you to install when you first use it
+   - Linux: Use your package manager (e.g., `sudo apt install git` for Ubuntu)
+
+2. **Install Git**:
+   - Windows: Run the downloaded installer and use all default options
+   - Mac: If prompted, follow the installation instructions
+   - Linux: The package manager will handle it
+
+3. **Verify Installation**:
+   - Open Terminal/Command Prompt
+   - Type `git --version` and press Enter
+   - If you see a version number, you're ready!
+
+### 3. Getting the Code
+
+1. **Open Terminal/Command Prompt**
+2. **Navigate to where you want the code**:
+   ```bash
+   # Windows example:
+   cd C:\Users\YourName\Documents
+
+   # Mac/Linux example:
+   cd ~/Documents
+   ```
+3. **Clone (download) the code**:
+   ```bash
+   git clone https://github.com/Carbonitex/carbon-commander.git
+   cd carbon-commander
+   ```
+
+Now you're ready to follow the Installation instructions below!
+
 ## Installation
 
 1. Clone this repository
