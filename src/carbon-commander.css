@@ -733,12 +733,121 @@
     width: max-content;
     display: flex;
     align-items: center;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
 }
 
 .cc-tool-count::before {
     content: '⚡';
     margin-right: 4px;
     font-size: 8px;
+}
+
+.cc-tool-list {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    width: 400px;
+    max-height: 500px;
+    background-color: rebeccapurple;
+    border: 1px solid mediumorchid;
+    border-radius: 8px;
+    margin-top: 8px;
+    padding: 12px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    animation: toolListFadeIn 0.2s ease-out;
+}
+
+.cc-tool-list.visible {
+    display: block;
+}
+
+.cc-tool-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.cc-tool-list-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: white;
+}
+
+.cc-tool-list-close {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 4px;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.cc-tool-list-close:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.cc-tool-list-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cc-tool-item {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    padding: 10px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.cc-tool-item:hover {
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+.cc-tool-item-name {
+    font-weight: 500;
+    color: #79c1ff;
+    margin-bottom: 4px;
+}
+
+.cc-tool-item-description {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1.4;
+}
+
+@keyframes toolListFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Add a subtle arrow pointing to the tool count */
+.cc-tool-list::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    right: 20px;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 8px solid rebeccapurple;
 }
 
 .cc-no-provider {

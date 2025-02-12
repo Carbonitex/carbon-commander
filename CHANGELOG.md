@@ -8,17 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Initial project structure and setup
-- Command palette interface with AI integration
-- Support for OpenAI and Ollama providers
-- Extensible tool system for custom functionality
-- Real-time streaming responses
-- Command history and autocomplete features
-- Local AI capabilities through Ollama integration
-- Modern UI with markdown rendering
-- Tool execution system with confirmation dialogs
-- Provider status indicators and model download progress
-- Comprehensive documentation and contribution guidelines
+- N/A
 
 ### Changed
 - N/A
@@ -34,6 +24,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 - N/A
+
+## [0.2.0] - 2025-02-11
+
+### Added
+- [Untested] MCP (Model Context Protocol) integration with comprehensive setup guide
+- [Untested] Customizable keyboard shortcuts with UI configuration options
+- [Untested] Various service integrations
+- Tool list UI
+- Enhanced documentation for MCP setup and usage
+
+### Changed
+- Reorganized tool system architecture for better extensibility
+- Enhanced command palette positioning and interaction
+- Updated documentation to reflect new features and capabilities
 
 ## [0.1.0] - 2025-02-10
 - Initial release of my Chrome extension

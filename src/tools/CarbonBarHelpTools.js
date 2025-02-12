@@ -9,19 +9,73 @@ class CarbonBarHelpTools {
         return [
             CarbonBarHelpTools.SetOpenAIKey.function,
             CarbonBarHelpTools.CheckOllamaStatus.function,
-            CarbonBarHelpTools.GetSetupGuide.function
+            CarbonBarHelpTools.GetSetupGuide.function,
+            CarbonBarHelpTools.GetUsageGuide.function,
+            CarbonBarHelpTools.ChangeKeybind.function,
+            CarbonBarHelpTools.ListGuides.function
         ];
     }
+
+    static ListGuides = {
+        function: {
+            name: 'list_guides',
+            description: 'List all available guides and documentation',
+            parameters: {}
+        },
+        execute: async function(scope, args) {
+            const guide = `# Available Guides in Carbon Commander
+
+## Setup Guides
+Use \`get_setup_guide [topic]\` with:
+- \`openai\` - OpenAI API setup and configuration
+- \`ollama\` - Ollama local AI setup and configuration
+- \`mcp\` - MCP service setup and integration
+- \`general\` - General setup and configuration overview
+
+## Usage Guides
+Use \`get_usage_guide [topic]\` with:
+- \`keybinds\` - Keyboard shortcuts and customization
+- \`commands\` - Available commands and usage
+- \`tools\` - Tool system and functionality
+- \`general\` - Quick start and overview
+
+## Examples
+1. Get OpenAI setup instructions:
+   \`get_setup_guide openai\`
+
+2. Learn about keyboard shortcuts:
+   \`get_usage_guide keybinds\`
+
+3. Set up MCP services:
+   \`get_setup_guide mcp\`
+
+4. Get general usage overview:
+   \`get_usage_guide general\`
+
+## Additional Help
+- Type \`help\` for general assistance
+- Type \`change-keybind\` to customize shortcuts
+- Click the ⚡ icon to see all available tools
+- Use \`mcp connect\` to add services
+
+## Quick Links
+- [OpenAI Platform](https://platform.openai.com)
+- [Ollama Website](https://ollama.ai)
+- [Chrome Extensions](chrome://extensions)`;
+
+            return { success: true, result: guide };
+        }
+    };
 
     static GetSetupGuide = {
         function: {
             name: 'get_setup_guide',
-            description: 'Get detailed setup instructions for OpenAI and Ollama',
+            description: 'Get detailed setup instructions for OpenAI, Ollama, and MCP',
             parameters: {
                 properties: {
                     topic: {
                         type: 'string',
-                        description: 'The specific setup topic (openai, ollama, or general)'
+                        description: 'The specific setup topic (openai, ollama, mcp, or general). Use list_guides to see all available guides.'
                     }
                 },
                 required: ['topic']
@@ -42,7 +96,25 @@ class CarbonBarHelpTools {
 5. Copy your API key
 6. Use the command: \`set openai-key YOUR_API_KEY\`
 
-Note: Keep your API key secure and never share it publicly.`;
+## Additional Configuration
+- API key is stored securely and encrypted
+- Key can be updated any time with the same command
+- Use \`disconnect openai\` to remove the key
+
+## Troubleshooting
+- Ensure your API key is valid and has sufficient credits
+- Check connection status in the status badges
+- If issues persist, try disconnecting and reconnecting
+
+## Tips
+- Keep your API key secure and never share it
+- Regularly rotate your API keys for security
+- Monitor your API usage on OpenAI's platform
+
+Need more help? Try:
+- \`get_usage_guide general\` for general usage
+- \`list_guides\` to see all available guides
+- \`check-ollama\` to verify Ollama status`;
                     break;
 
                 case 'ollama':
@@ -57,27 +129,218 @@ Note: Keep your API key secure and never share it publicly.`;
    \`\`\`
 5. Restart Ollama after setting OLLAMA_ORIGINS
 
-The command bar will automatically detect Ollama when it's running.`;
+## Configuration
+- No API key required
+- Runs completely locally
+- Automatic model management
+- Supports multiple AI models
+
+## Verification
+Use \`check-ollama\` to verify:
+- Connection status
+- Available models
+- Service health
+
+## Troubleshooting
+1. If Ollama is not detected:
+   - Check if Ollama is running
+   - Verify OLLAMA_ORIGINS setting (macOS)
+   - Restart Ollama service
+
+2. For connection issues:
+   - Check firewall settings
+   - Verify port 11434 is available
+   - Ensure no conflicts with other services
+
+## Tips
+- Keep Ollama updated for best performance
+- Use lightweight models for faster responses
+- Configure resource limits as needed
+
+Need more help? Try:
+- \`get_usage_guide general\` for general usage
+- \`list_guides\` to see all available guides
+- \`check-ollama\` for status check`;
+                    break;
+
+                case 'mcp':
+                    guide = `# Setting up MCP (Model Context Protocol)
+
+## Overview
+MCP allows you to extend Carbon Commander with external AI services and tools.
+
+## Basic Setup
+1. **Simple Connection**
+   \`\`\`
+   mcp connect my-service https://my-mcp-service.example.com
+   \`\`\`
+
+2. **With Authentication**
+   \`\`\`javascript
+   window.carbonCommander.mcpToolCaller.configureMCPService({
+     serviceId: 'my-service',
+     endpoint: 'https://my-mcp-service.example.com',
+     apiKey: 'your-api-key',
+     options: {
+       autoConnect: true,
+       autoReconnect: true
+     }
+   });
+   \`\`\`
+
+## Service Management
+1. **View Status**:
+   - Check status badges in UI
+   - Look for "MCP:" prefix in tools list
+
+2. **Disconnect Service**:
+   \`mcp disconnect my-service\`
+
+## Creating an MCP Service
+Required endpoints:
+\`\`\`javascript
+GET  /discover-tools    // List available tools
+POST /execute          // Execute tool function
+GET  /status           // Service status
+
+// Optional endpoints
+POST /build-scope      // Custom tool scope
+POST /system-prompt    // Enhance prompts
+\`\`\`
+
+## Example Service Definition
+\`\`\`javascript
+{
+  name: "email-tools",
+  tools: [{
+    name: "send-email",
+    description: "Send email via MCP",
+    parameters: {
+      type: "object",
+      properties: {
+        to: { type: "string" },
+        subject: { type: "string" },
+        body: { type: "string" }
+      },
+      required: ["to", "subject", "body"]
+    }
+  }]
+}
+\`\`\`
+
+## Security Best Practices
+1. Use HTTPS for all connections
+2. Implement proper authentication
+3. Validate all requests
+4. Use rate limiting
+5. Monitor service usage
+
+## Troubleshooting
+1. **Connection Issues**:
+   - Verify endpoint URL
+   - Check authentication
+   - Ensure service is running
+
+2. **Tool Discovery**:
+   - Verify /discover-tools endpoint
+   - Check tool definitions
+   - Monitor browser console
+
+3. **Execution Problems**:
+   - Validate parameters
+   - Check error responses
+   - Verify tool implementation
+
+## Tips
+- Use autoConnect for reliability
+- Implement error handling
+- Monitor tool performance
+- Keep services updated
+
+Need more help? Try:
+- \`get_usage_guide tools\` for tool usage
+- \`list_guides\` for all guides
+- Check service documentation`;
                     break;
 
                 case 'general':
-                    guide = `# Getting Started with Carbon Commander
+                    guide = `# General Setup Guide
 
-Carbon Commander works best with both OpenAI and Ollama:
+## Quick Start
+1. Install the extension
+2. Configure providers:
+   - OpenAI for advanced features (\`get_setup_guide openai\`)
+   - Ollama for local processing (\`get_setup_guide ollama\`)
+   - MCP for external services (\`get_setup_guide mcp\`)
+3. Customize keyboard shortcuts
+4. Start using commands
 
-- OpenAI provides advanced AI capabilities
-- Ollama offers local processing for faster responses
+## AI Provider Setup
+1. **OpenAI (Recommended)**
+   - Get API key: \`get_setup_guide openai\`
+   - Set key: \`set openai-key YOUR_KEY\`
+   - Check status in badges
 
-## Quick Setup Steps:
-1. Set up OpenAI first (use \`get_setup_guide openai\`)
-2. Install Ollama (use \`get_setup_guide ollama\`)
-3. The command bar will automatically detect when both are ready
+2. **Ollama (Optional)**
+   - Install locally: \`get_setup_guide ollama\`
+   - Runs automatically when detected
+   - Provides faster local processing
 
-Need more help? Use \`get_setup_guide\` with 'openai' or 'ollama' for detailed instructions.`;
+3. **MCP Services (Optional)**
+   - Connect services: \`mcp connect [service-id] [endpoint]\`
+   - View status in badges
+   - Use service-specific tools
+
+## Keyboard Setup
+1. Default: \`Ctrl/⌘ + K\`
+2. Customize:
+   - Use \`change-keybind\` command
+   - Or click extension icon
+   - Or use Chrome settings
+
+## Verification
+1. Check OpenAI:
+   - Look for green status badge
+   - Try a simple command
+   
+2. Check Ollama:
+   - Use \`check-ollama\` command
+   - Verify status badge
+
+3. Check MCP:
+   - Look for service badges
+   - Try service-specific tools
+
+## Next Steps
+1. Try basic commands
+2. Explore available tools
+3. Set up keyboard shortcuts
+4. Configure AI providers
+
+Need more details? Try:
+- \`get_setup_guide openai\` for OpenAI setup
+- \`get_setup_guide ollama\` for Ollama setup
+- \`get_setup_guide mcp\` for MCP setup
+- \`get_usage_guide general\` for usage help
+- \`list_guides\` to see all guides`;
                     break;
 
                 default:
-                    return { success: false, error: 'Invalid topic. Use "openai", "ollama", or "general".' };
+                    return { 
+                        success: false, 
+                        result: "Invalid topic. Available guides:\n\n" +
+                               "1. Setup Guides (use get_setup_guide):\n" +
+                               "   - openai: OpenAI configuration\n" +
+                               "   - ollama: Ollama setup\n" +
+                               "   - mcp: MCP service setup\n" +
+                               "   - general: Overall setup\n\n" +
+                               "2. Usage Guides (use get_usage_guide):\n" +
+                               "   - keybinds: Keyboard shortcuts\n" +
+                               "   - commands: Available commands\n" +
+                               "   - tools: Tool system\n" +
+                               "   - general: Quick start\n\n" +
+                               "Use list_guides to see all available guides."
+                    };
             }
 
             return { success: true, result: guide };
@@ -153,6 +416,181 @@ Need more help? Use \`get_setup_guide\` with 'openai' or 'ollama' for detailed i
                 };
                 window.addEventListener('message', listener);
             });
+        }
+    };
+
+    static GetUsageGuide = {
+        function: {
+            name: 'get_usage_guide',
+            description: 'Get detailed usage instructions for Carbon Commander features',
+            parameters: {
+                properties: {
+                    topic: {
+                        type: 'string',
+                        description: 'The specific usage topic (keybinds, commands, tools, or general)'
+                    }
+                },
+                required: ['topic']
+            }
+        },
+        execute: async function(scope, args) {
+            const { topic } = args;
+            let guide = '';
+
+            switch(topic.toLowerCase()) {
+                case 'keybinds':
+                    guide = `# Keyboard Shortcuts Guide
+
+## Default Shortcuts
+- Open/Close: \`Ctrl + K\` (Windows/Linux) or \`⌘ + K\` (Mac)
+- Close: \`Esc\`
+- Command History: \`↑\` and \`↓\` arrow keys
+- Autocomplete: \`Tab\`
+
+## Customizing Shortcuts
+1. **Through Extension Icon**:
+   - Click Carbon Commander icon
+   - Select "Change Keybind"
+   - Press desired key combination
+   - Click "Save"
+
+2. **Through Chrome Settings**:
+   - Go to \`chrome://extensions/shortcuts\`
+   - Find Carbon Commander
+   - Click the pencil icon
+   - Set your shortcut
+
+3. **Using Command**:
+   - Type \`change-keybind\` in Carbon Commander
+   - Follow the prompts
+
+## Tips
+- Combine with \`Ctrl\` or \`⌘\` for better shortcuts
+- Avoid system-reserved shortcuts
+- Use single letter keys for quick access`;
+                    break;
+
+                case 'commands':
+                    guide = `# Available Commands Guide
+
+## Basic Commands
+- \`help\`: Show general help
+- \`get_usage_guide [topic]\`: Get detailed usage instructions
+- \`change-keybind\`: Change keyboard shortcut
+- \`set openai-key [key]\`: Set OpenAI API key
+- \`check-ollama\`: Check Ollama status
+
+## Navigation
+- Use arrow keys (↑/↓) for command history
+- Press Tab for autocomplete suggestions
+- Type partial command name to search
+
+## Tool Commands
+- Click the ⚡ icon to see all available tools
+- Tools are grouped by source (Local/MCP)
+- Each tool has a description and parameters
+
+## Tips
+- Commands are case-insensitive
+- Use autocomplete for faster input
+- Check tool descriptions for parameter info`;
+                    break;
+
+                case 'tools':
+                    guide = `# Tools Usage Guide
+
+## Tool Categories
+1. **Local Tools**
+   - Built-in functionality
+   - No external dependencies
+   - Fast execution
+
+2. **MCP Tools**
+   - External service integration
+   - Additional capabilities
+   - Network-dependent
+
+## Using Tools
+1. Click the ⚡ icon to view all tools
+2. Select a tool to auto-fill command
+3. Provide required parameters
+4. View results in the response area
+
+## Tool Features
+- Real-time execution feedback
+- Error handling and recovery
+- Parameter validation
+- Result formatting
+
+## Tips
+- Use tool descriptions for guidance
+- Check parameter requirements
+- Monitor tool status indicators
+- Use command history for repeated tasks`;
+                    break;
+
+                case 'general':
+                    guide = `# Carbon Commander Quick Start Guide
+
+## Getting Started
+1. Open with \`Ctrl/⌘ + K\` or click extension icon
+2. Type your command or question
+3. Use Tab for autocomplete
+4. Press Enter to execute
+
+## Key Features
+1. **AI Integration**
+   - OpenAI for advanced processing
+   - Ollama for local operations
+   - Real-time responses
+
+2. **Tool System**
+   - Built-in tools
+   - MCP service integration
+   - Custom tool support
+
+3. **Command History**
+   - Arrow keys navigation
+   - Persistent storage
+   - Quick access to recent commands
+
+4. **Autocomplete**
+   - Smart suggestions
+   - Tab completion
+   - Context-aware
+
+## Best Practices
+- Start with simple commands
+- Use help guides for specific topics
+- Customize shortcuts for efficiency
+- Check tool documentation
+
+Need more help? Try:
+- \`get_usage_guide keybinds\`
+- \`get_usage_guide commands\`
+- \`get_usage_guide tools\``;
+                    break;
+
+                default:
+                    return { success: false, error: 'Invalid topic. Use "keybinds", "commands", "tools", or "general".' };
+            }
+
+            return { success: true, result: guide };
+        }
+    };
+
+    static ChangeKeybind = {
+        function: {
+            name: 'change-keybind',
+            description: 'Change the keyboard shortcut for opening Carbon Commander',
+            parameters: {}
+        },
+        execute: async function(scope, args) {
+            window.postMessage({ type: 'SHOW_KEYBIND_DIALOG' }, window.location.origin);
+            return { 
+                success: true, 
+                result: "Opening keybind configuration dialog..." 
+            };
         }
     };
 }

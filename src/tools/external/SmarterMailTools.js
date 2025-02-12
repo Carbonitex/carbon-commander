@@ -1,5 +1,8 @@
-class SMTools {
-    static name = "SMTools";
+
+//TODO: Reduce size of SM content returns
+
+class SmarterMailTools {
+    static name = "SmarterMailTools";
 
     static _CarbonBarPageLoadFilter = (window) => {
         try{
@@ -1735,13 +1738,6 @@ class SMTools {
     };
 } 
 
-//if(window.sbaiTools) {
-//    window.sbaiTools['SMTools'] = SMTools;
-//} else {
-//    window.sbaiTools = {
-//        'SMTools': SMTools
-//    };
-//}
-(window.sbaiTools ??= {}).SMTools = SMTools;
+(window.sbaiTools ??= {}).SmarterMailTools = SmarterMailTools;
 
-export { SMTools };
+export { SmarterMailTools };

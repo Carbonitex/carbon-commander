@@ -7,6 +7,19 @@ function injectCarbonBar(file_path, tag) {
   // Send message to background script to get tab ID
   chrome.runtime.sendMessage({ type: 'GET_TAB_ID' }, function(response) {
     const currentTabId = response.tabId;
+
+    // Create extension icon click handler
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.type === 'TOGGLE_CARBONBAR') {
+        window.postMessage({ type: 'TOGGLE_CARBONBAR' }, window.location.origin);
+        sendResponse(true);
+      }
+      if (message.type === 'SHOW_KEYBIND_DIALOG') {
+        window.postMessage({ type: 'SHOW_KEYBIND_DIALOG' }, window.location.origin);
+        sendResponse(true);
+      }
+    });
+
     ccLogger.debug('Injecting carbonbar script:', file_path, currentTabId);
     var node = document.getElementsByTagName(tag)[0];
     
@@ -39,6 +52,16 @@ if (!window.carbonBarInjected && !inIframe) {
           status: true
         }, window.location.origin);
       }, 1000);
+    }
+  });
+
+  // Load saved keybind if it exists
+  chrome.storage.local.get(['carbonbar_keybind'], (result) => {
+    if (result.carbonbar_keybind) {
+      window.postMessage({
+        type: 'SET_KEYBIND',
+        payload: result.carbonbar_keybind
+      }, window.location.origin);
     }
   });
 
@@ -210,6 +233,25 @@ if (!window.carbonBarInjected && !inIframe) {
           }
         }
       );
+    }
+
+    if (event.data.type === "SAVE_KEYBIND") {
+      chrome.storage.local.set({ 
+        'carbonbar_keybind': event.data.payload 
+      }, () => {
+        if (chrome.runtime.lastError) {
+          ccLogger.error('Error saving keybind:', chrome.runtime.lastError);
+        }
+      });
+    }
+
+    if (event.data.type === "GET_KEYBIND") {
+      chrome.storage.local.get(['carbonbar_keybind'], (result) => {
+        window.postMessage({
+          type: 'SET_KEYBIND',
+          payload: result.carbonbar_keybind || { key: 'k', ctrl: true, meta: false }
+        }, window.location.origin);
+      });
     }
   });
 

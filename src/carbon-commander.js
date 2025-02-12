@@ -18,7 +18,8 @@
  */
 
 import { marked } from 'marked';
-import ToolCaller  from './tool-caller.js';
+import ToolCaller from './tool-caller.js';
+import MCPToolCaller from './mcp-tool-caller.js';
 import { AICallerModels } from './external-services/caller.js';
 import { CarbonBarHelpTools } from './tools/CarbonBarHelpTools.js';
 import { ccLogger } from './global.js';
@@ -27,6 +28,9 @@ import styles from './carbon-commander.css';
 class CarbonCommander {
     constructor(currentApp) {
       this.currentApp = currentApp || `CarbonCommander [${window.location.hostname}]`;
+      this.toolCaller = ToolCaller;
+      this.mcpToolCaller = MCPToolCaller;
+      this.keybind = { key: 'k', ctrl: true, meta: false }; // Default keybind
 
       var tabId = document.querySelector('meta[name="tabId"]').getAttribute('content');
       ccLogger.info("Initializing with tabId:", tabId);
@@ -97,6 +101,24 @@ class CarbonCommander {
       setTimeout(() => {
         this.checkOllamaAvailability();
       }, 1000);
+
+      // Add MCP status tracking
+      this.mcpStatusInterval = null;
+      this.startMCPStatusChecks();
+    }
+
+    startMCPStatusChecks() {
+      // Check MCP service status periodically
+      this.mcpStatusInterval = setInterval(() => {
+        this.updateMCPStatus();
+      }, 30000); // Every 30 seconds
+    }
+
+    async updateMCPStatus() {
+      const services = this.mcpToolCaller.getMCPServices();
+      services.forEach(service => {
+        this.updateProviderStatus(`mcp:${service.id}`, service.connected);
+      });
     }
 
     async addSystemPrompt() {
@@ -105,9 +127,20 @@ class CarbonCommander {
       systemPrompt += ' The current date and time is ' + new Date().toLocaleString();
       systemPrompt += '. You can use the tools to perform tasks, chain them together to build context, and perform complex tasks.';
     
-
+      // Get system prompts from both local and MCP tools
       ccLogger.debug('Building system prompt with tools');
-      systemPrompt = await ToolCaller.buildSystemPrompt(systemPrompt, this);
+      systemPrompt = await this.toolCaller.buildSystemPrompt(systemPrompt, this);
+      
+      // Add MCP-specific system prompts
+      for (const [serviceId, client] of this.mcpToolCaller.mcpClients.entries()) {
+        try {
+          if (client.getSystemPrompt) {
+            systemPrompt = await client.getSystemPrompt(systemPrompt, this);
+          }
+        } catch (error) {
+          ccLogger.error(`Error getting MCP system prompt for ${serviceId}:`, error);
+        }
+      }
 
       this.messages.push({
         role: 'system',
@@ -126,6 +159,7 @@ class CarbonCommander {
             <div class="cc-status-badges">
               <div class="cc-provider-badge" data-provider="ollama">Ollama</div>
               <div class="cc-provider-badge" data-provider="openai">OpenAI</div>
+              <div class="cc-mcp-badges"></div>
               <div class="cc-tool-count"></div>
             </div>
           </div>    
@@ -134,16 +168,33 @@ class CarbonCommander {
             <input id="cc-input" data-lpignore="true" autocomplete="off" type="text" 
                    class="cc-input" placeholder="Type a command..." autofocus>
           </div>
+          <div class="cc-tool-list">
+            <div class="cc-tool-list-header">
+              <div class="cc-tool-list-title">Available Tools</div>
+              <button class="cc-tool-list-close">×</button>
+            </div>
+            <div class="cc-tool-list-content"></div>
+          </div>
         </div>
       `;
   
       this.input = this.container.querySelector('.cc-input');
       this.resultsContainer = this.container.querySelector('.cc-results');
+      this.toolList = this.container.querySelector('.cc-tool-list');
   
-      // Add tool count display
-      const toolCount = ToolCaller.getTools(true).length;
+      // Update tool count display to show local and MCP tools separately
+      const localTools = this.toolCaller.getTools(true).length;
+      const mcpTools = this.mcpToolCaller.mcpToolsets.size > 0 ? 
+        Array.from(this.mcpToolCaller.mcpToolsets.values())
+          .reduce((count, toolset) => count + toolset.tools.length, 0) : 0;
+      
       const toolCountEl = this.container.querySelector('.cc-tool-count');
-      toolCountEl.textContent = `${toolCount} tools`;
+      toolCountEl.textContent = mcpTools > 0 ? 
+        `${localTools} local + ${mcpTools} MCP tools` : 
+        `${localTools} tools`;
+
+      // Set up tool list click handlers
+      this.setupToolList();
 
       this.input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
@@ -191,17 +242,21 @@ class CarbonCommander {
     }
   
     setupEventListeners() {
-      // Update keyboard shortcut to properly toggle the command bar
+      // Update keyboard shortcut to use custom keybind
       document.addEventListener('keydown', (e) => {
-          // Check for Ctrl+K or Cmd+K (on Mac)
-          if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-              e.preventDefault();
-              if (this.isVisible) {
-                  this.hide();
-              } else {
-                  this.show();
-              }
+        const matchesKeybind = 
+          e.key.toLowerCase() === this.keybind.key.toLowerCase() && 
+          (e.ctrlKey === this.keybind.ctrl) && 
+          (e.metaKey === this.keybind.meta);
+
+        if (matchesKeybind) {
+          e.preventDefault();
+          if (this.isVisible) {
+            this.hide();
+          } else {
+            this.show();
           }
+        }
       });
 
       // Add event listener for model download progress
@@ -217,7 +272,7 @@ class CarbonCommander {
           const toolArgs = event.data.tool.arguments;
 
           ccLogger.debug('Received tool execution request:', toolName, toolArgs);
-          const tool = ToolCaller.getTool(toolName);
+          const tool = this.toolCaller.getTool(toolName);
           if (!tool) {
             ccLogger.error(`Tool not found: ${toolName}`);
             window.postMessage(
@@ -230,7 +285,7 @@ class CarbonCommander {
             return;
           }
           try {
-            const result = await tool.execute(await ToolCaller.getToolScope(this), toolArgs);
+            const result = await tool.execute(await this.toolCaller.getToolScope(this), toolArgs);
             ccLogger.debug("AI_EXECUTE_TOOL result:", result);
             window.postMessage(
               { type: 'AI_TOOL_RESPONSE', payload: result },
@@ -296,7 +351,7 @@ class CarbonCommander {
 
           if(this.hasNoAIMode && this.connectedProviders.has('openai') && this.connectedProviders.has('ollama')){
             this.hasNoAIMode = false;
-            this.currentApp = await ToolCaller.getToolScope(this).appName;
+            this.currentApp = await this.toolCaller.getToolScope(this).appName;
             this.updateTitle(this.currentApp);
             this.sendFakeAIResponse("🎉 All AI providers connected! You can now use all features.", 500);
             this.sendFakeAIResponse("Go ahead and hit ESC or Ctrl+K to close and reopen the command bar to enter normal mode.", 1000);
@@ -320,6 +375,29 @@ class CarbonCommander {
               }
             }
           }
+        }
+
+        if (event.data.type === 'MCP_SERVICE_CONFIG') {
+          const config = event.data.payload;
+          await this.mcpToolCaller.configureMCPService(config);
+          this.updateMCPStatus();
+        }
+
+        if (event.data.type === 'MCP_SERVICE_STATUS') {
+          const { serviceId, status } = event.data.payload;
+          this.updateProviderStatus(`mcp:${serviceId}`, status.connected);
+        }
+
+        if (event.data.type === 'TOGGLE_CARBONBAR') {
+          this.toggle();
+        }
+
+        if (event.data.type === 'SHOW_KEYBIND_DIALOG') {
+          this.showKeybindDialog();
+        }
+
+        if (event.data.type === 'SET_KEYBIND') {
+          this.keybind = event.data.payload;
         }
       });
     }
@@ -492,7 +570,7 @@ class CarbonCommander {
           let advancedView = toolCallDiv.querySelector('.tool-advanced-view');
 
           // Update both views
-          const {simpleHtml, advancedHtml} = ToolCaller.getToolHtml(chunk);
+          const {simpleHtml, advancedHtml} = this.toolCaller.getToolHtml(chunk);
           simpleView.innerHTML = simpleHtml;
           advancedView.innerHTML = advancedHtml;
 
@@ -643,7 +721,7 @@ Available tools are being limited. For more advanced features, recommend connect
         const key = userInput.substring(14).trim();
         
         try {
-          var result = await CarbonBarHelpTools.SetOpenAIKey.execute(await ToolCaller.getToolScope(this), {key: key});
+          var result = await CarbonBarHelpTools.SetOpenAIKey.execute(await this.toolCaller.getToolScope(this), {key: key});
           ccLogger.debug('result', result);
           if(result.success){
             this.sendFakeAIResponse('OpenAI key set successfully');
@@ -690,6 +768,25 @@ Available tools are being limited. For more advanced features, recommend connect
       ccLogger.group('Handle Submit');
       ccLogger.info('Processing input:', value);
 
+      // Special commands for MCP services
+      if (value.toLowerCase().startsWith('mcp connect ')) {
+        const [_, serviceId, endpoint] = value.split(' ');
+        await this.mcpToolCaller.configureMCPService({
+          serviceId,
+          endpoint,
+          options: { autoConnect: true }
+        });
+        this.sendFakeAIResponse(`Connecting to MCP service: ${serviceId}`);
+        return;
+      }
+
+      if (value.toLowerCase().startsWith('mcp disconnect ')) {
+        const serviceId = value.split(' ')[2];
+        await this.mcpToolCaller.disconnectMCPService(serviceId);
+        this.sendFakeAIResponse(`Disconnected from MCP service: ${serviceId}`);
+        return;
+      }
+
       if (value.toLowerCase() === 'disconnect openai') {
         ccLogger.info('Disconnecting OpenAI');
         this.sendFakeAIResponse("OpenAI disconnected successfully");
@@ -734,32 +831,32 @@ Available tools are being limited. For more advanced features, recommend connect
           if(this.hasNoAIMode) {
             this.noAIModeInputHandler(this.messages);
           } else {
-
             // Build request to send to the ai-service
+            const localTools = this.toolCaller.getTools(true);
+            const mcpTools = Array.from(this.mcpToolCaller.mcpToolsets.values())
+                .reduce((tools, toolset) => tools.concat(toolset.tools), []);
+
             var request = {
               messages: this.messages,
-              model: AICallerModels.FAST, //this will be set by the ai-service if null
-              tools: ToolCaller.getTools(true),
+              model: AICallerModels.FAST,
+              tools: [...localTools, ...mcpTools], // Combine unique tools
               temp: 0.8,
-              keepAlive: '30m',
-              //provider: 'openai'
-          };
+              keepAlive: '30m'
+            };
 
-          // Send message to ai-service
-          window.postMessage(
-            { 
-              type: "AI_REQUEST", 
-              payload: request,
-              tabId: window.tabId
-            },
-            window.location.origin
-          );
+            // Send message to ai-service
+            window.postMessage(
+              { 
+                type: "AI_REQUEST", 
+                payload: request,
+                tabId: window.tabId
+              },
+              window.location.origin
+            );
+          }
 
-          
-        }
-
-        //The messages will come in via previously setup event listeners
-        //and will be handled by the completeResponse function
+          //The messages will come in via previously setup event listeners
+          //and will be handled by the completeResponse function
       } catch (error) {
           // Add transitioning class before changing to error state
           container.classList.add('transitioning');
@@ -792,7 +889,7 @@ Available tools are being limited. For more advanced features, recommend connect
     }
 
     async show() {
-      this.currentApp = (await ToolCaller.getToolScope(this))?.appName || 'CarbonCommander [Unknown App]';
+      this.currentApp = (await this.toolCaller.getToolScope(this))?.appName || 'CarbonCommander [Unknown App]';
       this.updateTitle(this.currentApp);
       
       const container = this.container.querySelector('.cc-container');
@@ -818,7 +915,7 @@ Available tools are being limited. For more advanced features, recommend connect
       this.input.value = '';
       this.messages = []; //clear the message history
       this.resultsContainer.innerHTML = '';
-      ToolCaller.reset();
+      this.toolCaller.reset();
       // Don't clear command history, just reset the index
       this.historyIndex = this.commandHistory.length;
 
@@ -1034,8 +1131,8 @@ Available tools are being limited. For more advanced features, recommend connect
     getAutocompleteContext(input) {
       var context = '';
       //build tools into context
-      //context += ToolCaller.getTools(true).map(tool => `${tool.name} - ${tool.description}`).join('\n');
-      context += ToolCaller.getTools(true).map(tool => `${tool.description}`).join('\n');
+      //context += this.toolCaller.getTools(true).map(tool => `${tool.name} - ${tool.description}`).join('\n');
+      context += this.toolCaller.getTools(true).map(tool => `${tool.description}`).join('\n');
 
       //build command history, last 10 commands
       const commandHistory = this.commandHistory.slice(-10);
@@ -1192,15 +1289,38 @@ Available tools are being limited. For more advanced features, recommend connect
 
     updateProviderStatus(provider, isConnected) {
       ccLogger.info('updateProviderStatus', provider, isConnected);
-      // Update the provider badge
-      const badge = this.container.querySelector(`.cc-provider-badge[data-provider="${provider}"]`);
-      if (badge) {
+      
+      if (provider.startsWith('mcp:')) {
+        // Handle MCP provider badges
+        const mcpBadgesContainer = this.container.querySelector('.cc-mcp-badges');
+        let badge = mcpBadgesContainer.querySelector(`[data-provider="${provider}"]`);
+        
+        if (!badge) {
+          badge = document.createElement('div');
+          badge.classList.add('cc-provider-badge');
+          badge.setAttribute('data-provider', provider);
+          badge.textContent = provider.substring(4); // Remove 'mcp:' prefix
+          mcpBadgesContainer.appendChild(badge);
+        }
+        
         if (isConnected) {
           badge.setAttribute('data-status', 'connected');
           this.connectedProviders.add(provider);
         } else {
           badge.removeAttribute('data-status');
           this.connectedProviders.delete(provider);
+        }
+      } else {
+        // Handle regular provider badges
+        const badge = this.container.querySelector(`.cc-provider-badge[data-provider="${provider}"]`);
+        if (badge) {
+          if (isConnected) {
+            badge.setAttribute('data-status', 'connected');
+            this.connectedProviders.add(provider);
+          } else {
+            badge.removeAttribute('data-status');
+            this.connectedProviders.delete(provider);
+          }
         }
       }
       
@@ -1297,6 +1417,179 @@ Available tools are being limited. For more advanced features, recommend connect
         const sizes = ['B', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+    }
+
+    cleanup() {
+      if (this.mcpStatusInterval) {
+        clearInterval(this.mcpStatusInterval);
+        this.mcpStatusInterval = null;
+      }
+      // Disconnect all MCP services
+      this.mcpToolCaller.getMCPServices().forEach(service => {
+        this.mcpToolCaller.disconnectMCPService(service.id);
+      });
+    }
+
+    setupToolList() {
+        const toolCountEl = this.container.querySelector('.cc-tool-count');
+        const toolList = this.container.querySelector('.cc-tool-list');
+        const closeButton = toolList.querySelector('.cc-tool-list-close');
+        const toolListContent = toolList.querySelector('.cc-tool-list-content');
+
+        // Toggle tool list on tool count click
+        toolCountEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleToolList();
+        });
+
+        // Close tool list when clicking close button
+        closeButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.hideToolList();
+        });
+
+        // Close tool list when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!toolList.contains(e.target) && !toolCountEl.contains(e.target)) {
+                this.hideToolList();
+            }
+        });
+
+        // Handle tool item clicks
+        toolListContent.addEventListener('click', (e) => {
+            const toolItem = e.target.closest('.cc-tool-item');
+            if (toolItem) {
+                const toolName = toolItem.getAttribute('data-tool-name');
+                if (toolName) {
+                    this.input.value = toolName;
+                    this.input.focus();
+                    this.hideToolList();
+                }
+            }
+        });
+
+        // Populate tool list
+        this.updateToolList();
+    }
+
+    updateToolList() {
+        const toolListContent = this.container.querySelector('.cc-tool-list-content');
+        const localTools = this.toolCaller.getTools(true);
+        const mcpTools = Array.from(this.mcpToolCaller.mcpToolsets.values())
+            .reduce((tools, toolset) => tools.concat(toolset.tools), []);
+        
+        // Group tools by source
+        const toolsHtml = `
+            <div class="cc-tool-group">
+                <div class="cc-tool-group-header">Local Tools (${localTools.length})</div>
+                ${localTools.map(tool => this.renderToolItem(tool, 'local')).join('')}
+            </div>
+            ${mcpTools.length > 0 ? `
+                <div class="cc-tool-group">
+                    <div class="cc-tool-group-header">MCP Tools (${mcpTools.length})</div>
+                    ${mcpTools.map(tool => this.renderToolItem(tool, 'mcp')).join('')}
+                </div>
+            ` : ''}
+        `;
+        
+        toolListContent.innerHTML = toolsHtml;
+    }
+
+    renderToolItem(tool, source) {
+        return `
+            <div class="cc-tool-item" data-tool-name="${tool.name}" data-source="${source}">
+                <div class="cc-tool-item-name">${tool.name}</div>
+                <div class="cc-tool-item-description">${tool.description}</div>
+            </div>
+        `;
+    }
+
+    toggleToolList() {
+        const toolList = this.container.querySelector('.cc-tool-list');
+        if (toolList.classList.contains('visible')) {
+            this.hideToolList();
+        } else {
+            this.showToolList();
+        }
+    }
+
+    showToolList() {
+        const toolList = this.container.querySelector('.cc-tool-list');
+        toolList.classList.add('visible');
+        // Update tool list content when showing
+        this.updateToolList();
+    }
+
+    hideToolList() {
+        const toolList = this.container.querySelector('.cc-tool-list');
+        toolList.classList.remove('visible');
+    }
+
+    showKeybindDialog() {
+      const dialogHTML = `
+        <div class="cc-dialog">
+          <div class="cc-dialog-content">
+            <h3>Change Keybind</h3>
+            <p>Press the key combination you want to use to open Carbon Commander.</p>
+            <p>Current keybind: ${this.getKeybindDisplay()}</p>
+            <div class="cc-keybind-input" tabindex="0">Press a key...</div>
+            <div class="cc-dialog-buttons">
+              <button class="cc-button confirm">Save</button>
+              <button class="cc-button cancel">Cancel</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const dialogElement = document.createElement('div');
+      dialogElement.innerHTML = dialogHTML;
+      this.resultsContainer.appendChild(dialogElement);
+
+      const keybindInput = dialogElement.querySelector('.cc-keybind-input');
+      let newKeybind = null;
+
+      keybindInput.addEventListener('keydown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Only allow modifier keys with a regular key
+        if (e.key.length === 1 || e.key.match(/^[a-zA-Z0-9]$/)) {
+          newKeybind = {
+            key: e.key.toLowerCase(),
+            ctrl: e.ctrlKey,
+            meta: e.metaKey
+          };
+          keybindInput.textContent = this.getKeybindDisplay(newKeybind);
+        }
+      });
+
+      const confirmBtn = dialogElement.querySelector('.confirm');
+      const cancelBtn = dialogElement.querySelector('.cancel');
+
+      confirmBtn.addEventListener('click', () => {
+        if (newKeybind) {
+          this.keybind = newKeybind;
+          window.postMessage({
+            type: 'SAVE_KEYBIND',
+            payload: newKeybind
+          }, window.location.origin);
+        }
+        dialogElement.remove();
+      });
+
+      cancelBtn.addEventListener('click', () => {
+        dialogElement.remove();
+      });
+
+      keybindInput.focus();
+    }
+
+    getKeybindDisplay(kb = this.keybind) {
+      const parts = [];
+      if (kb.ctrl) parts.push('Ctrl');
+      if (kb.meta) parts.push('⌘');
+      parts.push(kb.key.toUpperCase());
+      return parts.join(' + ');
     }
 }
 
