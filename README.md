@@ -23,6 +23,15 @@ A powerful command palette interface for Chrome with AI-powered tools and extens
    - Click "Load unpacked"
    - Select the `dist` directory
 
+### Updating
+
+To update Carbon Commander to the latest version:
+
+1. In your project directory, pull the latest changes: `git pull`
+2. Install any new dependencies: `npm install`
+3. Rebuild the extension: `npm run build`
+4. Chrome will automatically reload the extension with the new changes
+
 ## Usage
 
 ### Opening Carbon Commander
@@ -159,7 +168,6 @@ Carbon Commander supports integration with external MCP services, allowing you t
      }
    });
    ```
-
 ### Features
 
 - **Automatic Tool Discovery**: MCP services automatically expose their tools to Carbon Commander
