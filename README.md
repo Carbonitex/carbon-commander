@@ -4,21 +4,13 @@ A powerful command palette interface for Chrome with AI-powered tools and extens
 
 ## Features
 
-- AI-powered command palette with support for multiple LLM providers (OpenAI, Ollama)
-- Extensive external service integrations (Hacker News, Bitbucket, RocketChat, and more)
-- Manual tool execution through chat interface
-- Customizable keyboard shortcuts with UI configuration
-- Drag-and-drop tool list and command palette positioning
-- Settings menu for system customization
-- API key and configuration management
-- Extensible tool system for adding custom functionality
-- Local AI capabilities through Ollama integration
-- Real-time streaming responses and tool execution
-- Command history and autocomplete powered by Ollama
-- Comprehensive help system and guides
-- Smart context-aware suggestions
-- Tool discovery and management
-- MCP (Model Context Protocol) integration
+- 🤖 AI-powered command palette with OpenAI and local Ollama support
+- 🔌 Ecosystem for external service integrations (only SmarterMail is working well atm)
+- ⚡ Real-time responses with streaming support
+- 🛠️ Extensible tool system for custom functionality
+- ⌨️ Fully customizable keyboard shortcuts
+- 🔄 Smart context-aware suggestions and autocomplete
+- 📚 Comprehensive help system and documentation built into the extension
 
 ## Installation
 
@@ -102,6 +94,10 @@ Carbon Commander features a powerful tool system:
    - Click the ⚡ icon to view all tools
 
 2. **MCP Tools**:
+   > ⚠️ **WARNING: MCP Integration is currently UNTESTED**  
+   > The MCP (Model Context Protocol) integration is a work in progress and has not been thoroughly tested.
+   > Use with caution and expect potential issues until testing is complete.
+   
    - External service integration
    - Additional capabilities
    - Network-dependent
