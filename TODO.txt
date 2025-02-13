@@ -3,20 +3,15 @@ include /src/tools/external/_TODO.txt
 
 BUG: Ollama may not be working but I think its a local issue.
 
-
 (for me) TODO: Test MCP, It's all AI generated and I'vnt touched any of it yet.
-(for me) TODO: Code was added to configure the keybinds by AI but I haven't tested it yet.
+
+TODO: Code was added to configure the keybinds by AI but I haven't tested it yet.
+- A Ctrl+K is a common keybind, maybe pick another default?
 
 TODO: Add a way to manually call tools from the chat.
 - if they are clicked from the tool list it creates a widget with inputs to fill out
 - Also if the chat message starts with "tool:" then it will try to call the tool with the name after the colon.
 - have it so the tool call is automatically added as context to this.messages as well.
-
-TODO: Allow OpenAI badge to be clicked on to temporarily disable openai, grey it out but with a slight glow?
-
-TODO: The tool list spawns in a weird spot directly under the command bar.
-- Shift the tool list upwards to make room for the tool list.
-- Both this and the command bar should be able to be dragged around if grabing the background.
 
 TODO: Add a settings menu.
 - Custom system prompt to be injected into all system messages.
