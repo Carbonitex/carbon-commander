@@ -232,5 +232,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
+    if (message.type === 'TOGGLE_PROVIDER') {
+        const { provider, enabled } = message.payload;
+        if (provider === 'openai') {
+            if (!enabled) {
+                // Temporarily disable OpenAI
+                AICaller.disableProvider('openai');
+                chrome.tabs.sendMessage(sender.tab.id, {
+                    type: 'PROVIDER_STATUS_UPDATE',
+                    provider: 'openai',
+                    status: false
+                });
+            } else {
+                // Re-enable OpenAI if we have a key
+                AICaller.enableProvider('openai');
+                chrome.tabs.sendMessage(sender.tab.id, {
+                    type: 'PROVIDER_STATUS_UPDATE',
+                    provider: 'openai',
+                    status: true
+                });
+            }
+        }
+        sendResponse({ success: true });
+        return true;
+    }
+
     return false;
 });

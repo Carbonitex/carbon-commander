@@ -157,8 +157,8 @@ class CarbonCommander {
             <div class="cc-title">${this.currentApp}</div>
             <div style="flex-grow: 1;"></div>
             <div class="cc-status-badges">
-              <div class="cc-provider-badge" data-provider="ollama">Ollama</div>
-              <div class="cc-provider-badge" data-provider="openai">OpenAI</div>
+              <div class="cc-provider-badge" data-provider="ollama" title="Click to toggle">Ollama</div>
+              <div class="cc-provider-badge" data-provider="openai" title="Click to toggle">OpenAI</div>
               <div class="cc-mcp-badges"></div>
               <div class="cc-tool-count"></div>
             </div>
@@ -182,6 +182,34 @@ class CarbonCommander {
       this.resultsContainer = this.container.querySelector('.cc-results');
       this.toolList = this.container.querySelector('.cc-tool-list');
   
+      // Add click handlers for provider badges
+      const providerBadges = this.container.querySelectorAll('.cc-provider-badge');
+      providerBadges.forEach(badge => {
+        badge.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const provider = badge.getAttribute('data-provider');
+          const isEnabled = badge.getAttribute('data-status') === 'connected';
+          
+          // Provide immediate visual feedback
+          if (isEnabled) {
+            badge.setAttribute('data-status', 'disabled');
+            this.sendFakeAIResponse(`⏸️ ${provider} temporarily disabled`, 500);
+          } else if (badge.getAttribute('data-status') === 'disabled') {
+            badge.setAttribute('data-status', 'connected');
+            this.sendFakeAIResponse(`✅ ${provider} re-enabled`, 500);
+          }
+          
+          // Toggle provider status
+          window.postMessage({
+            type: 'TOGGLE_PROVIDER',
+            payload: {
+              provider,
+              enabled: !isEnabled
+            }
+          }, window.location.origin);
+        });
+      });
+
       // Update tool count display to show local and MCP tools separately
       const localTools = this.toolCaller.getTools(true).length;
       const mcpTools = this.mcpToolCaller.mcpToolsets.size > 0 ? 
@@ -1049,7 +1077,7 @@ Available tools are being limited. For more advanced features, recommend connect
         const confirmBtn = dialogElement.querySelector('.confirm');
         const cancelBtn = dialogElement.querySelector('.cancel');
 
-        confirmBtn.addEventListener('click', () => {
+        const submitDialog = () => {
             window.postMessage({
                 type: 'INPUT_DIALOG_RESPONSE',
                 payload: {
@@ -1059,7 +1087,17 @@ Available tools are being limited. For more advanced features, recommend connect
                 tabId: window.tabId
             }, window.location.origin);
             this.handleDialogResponse(input.value, dialogId);
+        };
+
+        // Add keydown event listener for Enter key
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                submitDialog();
+            }
         });
+
+        confirmBtn.addEventListener('click', submitDialog);
 
         cancelBtn.addEventListener('click', () => {
             window.postMessage({
@@ -1288,7 +1326,7 @@ Available tools are being limited. For more advanced features, recommend connect
     }
 
     updateProviderStatus(provider, isConnected) {
-      ccLogger.info('updateProviderStatus', provider, isConnected);
+      ccLogger.debug('PROVIDER_STATUS_UPDATE', provider, isConnected);
       
       if (provider.startsWith('mcp:')) {
         // Handle MCP provider badges
@@ -1315,7 +1353,12 @@ Available tools are being limited. For more advanced features, recommend connect
         const badge = this.container.querySelector(`.cc-provider-badge[data-provider="${provider}"]`);
         if (badge) {
           if (isConnected) {
-            badge.setAttribute('data-status', 'connected');
+            // Check if the provider is temporarily disabled
+            if (this.disabledProviders && this.disabledProviders.has(provider)) {
+              badge.setAttribute('data-status', 'disabled');
+            } else {
+              badge.setAttribute('data-status', 'connected');
+            }
             this.connectedProviders.add(provider);
           } else {
             badge.removeAttribute('data-status');
@@ -1323,7 +1366,6 @@ Available tools are being limited. For more advanced features, recommend connect
           }
         }
       }
-      
 
       if(!this.addedOllamaReminder && this.connectedProviders.has('ollama') && !this.connectedProviders.has('openai')) {
         this.addedOllamaReminder = true;

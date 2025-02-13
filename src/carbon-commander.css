@@ -200,7 +200,9 @@
     padding: 10px;
     background-color: dodgerblue;
     border-radius: 8px;
+    min-width: 65%;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: inline-block;
 }
 
 .cc-dialog-content {
@@ -257,7 +259,7 @@
 }
 
 .cc-dialog-input {
-    width: 100%;
+    width: 90%;
     padding: 8px;
     border: 1px solid var(--border-color, #ddd);
     border-radius: 4px;
@@ -936,19 +938,43 @@
     border-radius: 4px;
     font-size: xx-small;
     padding: 2px 6px;
-    transition: background-color 0.3s ease;
+    transition: background-color 0.3s ease, opacity 0.3s ease;
     display: flex;
     align-items: center;
+    cursor: pointer;
+    opacity: 0.5;
+    user-select: none;
+}
+
+.cc-provider-badge:hover {
+    opacity: 0.8;
 }
 
 .cc-provider-badge::before {
     content: '●';
     margin-right: 4px;
     font-size: 8px;
+    transition: color 0.3s ease;
 }
 
 .cc-provider-badge[data-status="connected"] {
     background-color: rgba(46, 204, 113, 0.7);
+    opacity: 1;
+}
+
+.cc-provider-badge[data-status="connected"]:hover {
+    opacity: 0.8;
+}
+
+.cc-provider-badge[data-status="disabled"] {
+    background-color: rgba(149, 165, 166, 0.7);
+    opacity: 0.6;
+    text-decoration: line-through;
+}
+
+.cc-provider-badge[data-status="disabled"]:hover {
+    opacity: 0.8;
+    text-decoration: line-through;
 }
 
 .cc-model-download-progress {

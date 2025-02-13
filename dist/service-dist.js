@@ -319,6 +319,22 @@ if (!window.carbonBarInjected && !inIframe) {
         }, window.location.origin);
       });
     }
+
+    if (event.data.type === "TOGGLE_PROVIDER") {
+      const { provider, enabled } = event.data.payload;
+      chrome.runtime.sendMessage(
+        { 
+          type: 'TOGGLE_PROVIDER', 
+          payload: { provider, enabled },
+          tabId: window.tabId 
+        },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            ccLogger.error('Error toggling provider:', chrome.runtime.lastError);
+          }
+        }
+      );
+    }
   });
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

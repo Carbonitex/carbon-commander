@@ -1,5 +1,9 @@
 include /src/tools/external/_TODO.txt
 
+
+BUG: Ollama may not be working but I think its a local issue.
+
+
 (for me) TODO: Test MCP, It's all AI generated and I'vnt touched any of it yet.
 (for me) TODO: Code was added to configure the keybinds by AI but I haven't tested it yet.
 
@@ -19,3 +23,4 @@ TODO: Add a settings menu.
 - Allow the user to configure the keybinds.
 - A key/value table that has a list of api keys or configuration snippets for tools 
 
+BUG: Github has keybinds that conflict with the command palette, stealing the input.

@@ -177,10 +177,28 @@ class OpenAIClient {
                             content: typeof toolCallerResult.result === 'string' ? toolCallerResult.result : JSON.stringify(toolCallerResult.result)
                         });
                     } else {
+                        console.log('Tool call failed:', toolCallerResult);
+
+                        let content = null;
+                        if(toolCallerResult.content) {
+                            content = toolCallerResult.content;
+                        } else if(toolCallerResult.result) {
+                            content = toolCallerResult.result;
+                        } else if(toolCallerResult.error) {
+                            content = toolCallerResult.error;
+                        } else {
+                            content = 'An unknown error occurred.';
+                        }
+
+                        // ai suggested this below? Could be useful ill keep it...
+                        if(content.includes('429')) {
+                            content = 'Rate limit exceeded. Please try again later.';
+                        }
+
                         messages.push({
                             role: 'tool',
                             tool_call_id: toolCall.id,
-                            content: typeof toolCallerResult.error === 'string' ? toolCallerResult.error : JSON.stringify(toolCallerResult.error)
+                            content: content
                         });
                     }
                 }

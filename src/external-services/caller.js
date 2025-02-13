@@ -27,6 +27,7 @@ class AICaller {
         this.openai = OpenAIClient;
         this.ollama = OllamaClient;
         this.defaultProvider = '';
+        this.disabledProviders = new Set();
         this.init();
     }
 
@@ -92,6 +93,10 @@ class AICaller {
     getClient(provider = null) {
         provider = provider || this.defaultProvider;
         
+        if (this.disabledProviders.has(provider)) {
+            throw new Error(`Provider ${provider} is temporarily disabled`);
+        }
+
         if (provider === 'openai' && !this.openai.isAvailable()) {
             throw new Error('OpenAI API key not set');
         }
@@ -275,6 +280,30 @@ class AICaller {
             }
         };
         return features[feature]?.[provider] || false;
+    }
+
+    disableProvider(provider) {
+        ccLogger.info(`Disabling provider: ${provider}`);
+        this.disabledProviders.add(provider);
+        
+        // If this was the default provider, try to switch to another one
+        if (provider === this.defaultProvider) {
+            if (provider === 'openai' && !this.disabledProviders.has('ollama')) {
+                this.setDefaultProvider('ollama');
+            } else if (provider === 'ollama' && !this.disabledProviders.has('openai')) {
+                this.setDefaultProvider('openai');
+            }
+        }
+    }
+
+    enableProvider(provider) {
+        ccLogger.info(`Enabling provider: ${provider}`);
+        this.disabledProviders.delete(provider);
+        
+        // If OpenAI is being enabled and we're currently using Ollama, switch back to OpenAI
+        if (provider === 'openai' && this.defaultProvider === 'ollama') {
+            this.setDefaultProvider('openai');
+        }
     }
 }
 
