@@ -1,0 +1,135 @@
+---
+description: Guidelines for UI components in CarbonCommander
+globs: ["*.css", "*.js"]
+---
+
+# UI Component Guidelines
+
+## Component Structure
+
+- Use Shadow DOM for component isolation
+- Keep styles scoped to components
+- Follow a consistent class naming convention
+- Use semantic HTML elements
+
+Example:
+```javascript
+this.root = document.createElement('div');
+this.shadow = this.root.attachShadow({ mode: 'closed' });
+```
+
+## CSS Class Naming
+
+- Use `cc-` prefix for all component classes
+- Use BEM-like naming convention:
+  - Block: `cc-dialog`
+  - Element: `cc-dialog-header`
+  - Modifier: `cc-dialog--visible`
+
+Example:
+```css
+.cc-container { }
+.cc-dialog-header { }
+.cc-input-wrapper { }
+```
+
+## State Management
+
+- Use CSS classes for state changes
+- Common states include:
+  - `visible`
+  - `processing`
+  - `success`
+  - `error`
+  - `waiting-input`
+
+Example:
+```javascript
+container.classList.remove('processing');
+container.classList.add('success');
+```
+
+## Animation and Transitions
+
+- Use CSS transitions for smooth state changes
+- Add appropriate transition classes
+- Consider performance implications
+- Use transform and opacity for better performance
+
+Example:
+```css
+.cc-dialog {
+    transition: opacity 0.15s ease-in-out;
+}
+```
+
+## Dialog Components
+
+- Include clear headers
+- Provide close buttons
+- Use consistent button styling
+- Handle keyboard interactions (Esc to close)
+- Center dialogs on screen
+
+Example structure:
+```html
+<div class="cc-dialog">
+    <div class="cc-dialog-header">
+        <div class="cc-title">Title</div>
+        <button class="cc-close">×</button>
+    </div>
+    <div class="cc-dialog-content">
+        <!-- Content here -->
+    </div>
+    <div class="cc-dialog-buttons">
+        <!-- Action buttons -->
+    </div>
+</div>
+```
+
+## Input Elements
+
+- Provide clear focus states
+- Include placeholder text
+- Handle keyboard events appropriately
+- Show validation feedback
+- Support autocomplete where appropriate
+
+## Progress Indicators
+
+- Show clear loading states
+- Use progress bars for determinate progress
+- Provide feedback for long-running operations
+- Include appropriate animations
+
+Example:
+```css
+.cc-progress-bar {
+    height: 2px;
+    background: linear-gradient(to right, #4CAF50, #8BC34A);
+    transition: width 0.3s ease-in-out;
+}
+```
+
+## Error Handling
+
+- Show clear error messages
+- Use consistent error styling
+- Provide recovery options
+- Include appropriate icons or visual indicators
+
+## Accessibility
+
+- Use ARIA labels where appropriate
+- Ensure keyboard navigation works
+- Maintain proper focus management
+- Use semantic HTML elements
+- Provide sufficient color contrast
+
+## Responsive Design
+
+- Use flexible layouts
+- Consider mobile viewports
+- Use relative units (rem, em)
+- Test on different screen sizes
+- Implement appropriate breakpoints 

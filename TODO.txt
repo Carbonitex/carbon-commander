@@ -13,9 +13,5 @@ TODO: Add a way to manually call tools from the chat.
 - Also if the chat message starts with "tool:" then it will try to call the tool with the name after the colon.
 - have it so the tool call is automatically added as context to this.messages as well.
 
-TODO: Add a settings menu.
-- Custom system prompt to be injected into all system messages.
-- Allow the user to configure the keybinds.
-- A key/value table that has a list of api keys or configuration snippets for tools 
-
 BUG: Github has keybinds that conflict with the command palette, stealing the input.
+IDEA: Tool suggestions while they are typing? Or maybe as a secondary prompt after the AI answer.

@@ -23,6 +23,7 @@ import MCPToolCaller from './mcp-tool-caller.js';
 import { AICallerModels } from './external-services/caller.js';
 import { CarbonBarHelpTools } from './tools/CarbonBarHelpTools.js';
 import { ccLogger } from './global.js';
+import settings from './settings.js';
 import styles from './carbon-commander.css';
 
 class CarbonCommander {
@@ -30,7 +31,8 @@ class CarbonCommander {
       this.currentApp = currentApp || `CarbonCommander [${window.location.hostname}]`;
       this.toolCaller = ToolCaller;
       this.mcpToolCaller = MCPToolCaller;
-      this.keybind = { key: 'k', ctrl: true, meta: false }; // Default keybind
+      this.settings = settings;
+      this.keybind = settings.keybind;
 
       var tabId = document.querySelector('meta[name="tabId"]').getAttribute('content');
       ccLogger.info("Initializing with tabId:", tabId);
@@ -121,34 +123,6 @@ class CarbonCommander {
       });
     }
 
-    async addSystemPrompt() {
-      ccLogger.group('System Prompt Generation');
-      var systemPrompt = `This is a smart chat bar a popup inside ${this.currentApp}. It can be used to ask questions, get help, and perform tasks.`;
-      systemPrompt += ' The current date and time is ' + new Date().toLocaleString();
-      systemPrompt += '. You can use the tools to perform tasks, chain them together to build context, and perform complex tasks.';
-    
-      // Get system prompts from both local and MCP tools
-      ccLogger.debug('Building system prompt with tools');
-      systemPrompt = await this.toolCaller.buildSystemPrompt(systemPrompt, this);
-      
-      // Add MCP-specific system prompts
-      for (const [serviceId, client] of this.mcpToolCaller.mcpClients.entries()) {
-        try {
-          if (client.getSystemPrompt) {
-            systemPrompt = await client.getSystemPrompt(systemPrompt, this);
-          }
-        } catch (error) {
-          ccLogger.error(`Error getting MCP system prompt for ${serviceId}:`, error);
-        }
-      }
-
-      this.messages.push({
-        role: 'system',
-        content: systemPrompt
-      });
-      ccLogger.groupEnd();
-    }
-  
     async init() {
       ccLogger.info(`Initializing CarbonCommander`);
       this.container.innerHTML = `
@@ -162,6 +136,7 @@ class CarbonCommander {
               <div class="cc-mcp-badges"></div>
               <div class="cc-tool-count"></div>
             </div>
+            <div class="cc-settings-icon" title="Settings">⚙️</div>
           </div>    
           <div class="cc-results" style="display: none;"></div>
           <div class="cc-input-wrapper">
@@ -267,6 +242,13 @@ class CarbonCommander {
       this.input.addEventListener('input', (e) => {
         this.handleInputChange(e);
       });
+
+      // Add click handler for settings icon
+      const settingsIcon = this.container.querySelector('.cc-settings-icon');
+      settingsIcon.addEventListener('click', () => this.showSettingsDialog());
+
+      // Load settings
+      await this.loadSettings();
     }
   
     setupEventListeners() {
@@ -924,11 +906,15 @@ Available tools are being limited. For more advanced features, recommend connect
       container.classList.remove('processing', 'tool-running', 'has-error', 'success');
       container.classList.add('waiting-input');
 
-      this.updateTitle(this.currentApp);
+      // Clear existing messages before adding system prompt
+      this.messages = [];
+      
+      // Add system prompt first
+      await this.addSystemPrompt();
+      
       this.root.classList.add('visible');
       this.isVisible = true;
       this.input.focus();
-      await this.addSystemPrompt();
     }
   
     hide() {
@@ -1568,70 +1554,55 @@ Available tools are being limited. For more advanced features, recommend connect
     }
 
     showKeybindDialog() {
-      const dialogHTML = `
-        <div class="cc-dialog">
-          <div class="cc-dialog-content">
-            <h3>Change Keybind</h3>
-            <p>Press the key combination you want to use to open Carbon Commander.</p>
-            <p>Current keybind: ${this.getKeybindDisplay()}</p>
-            <div class="cc-keybind-input" tabindex="0">Press a key...</div>
-            <div class="cc-dialog-buttons">
-              <button class="cc-button confirm">Save</button>
-              <button class="cc-button cancel">Cancel</button>
-            </div>
-          </div>
-        </div>
-      `;
-
-      const dialogElement = document.createElement('div');
-      dialogElement.innerHTML = dialogHTML;
-      this.resultsContainer.appendChild(dialogElement);
-
-      const keybindInput = dialogElement.querySelector('.cc-keybind-input');
-      let newKeybind = null;
-
-      keybindInput.addEventListener('keydown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        // Only allow modifier keys with a regular key
-        if (e.key.length === 1 || e.key.match(/^[a-zA-Z0-9]$/)) {
-          newKeybind = {
-            key: e.key.toLowerCase(),
-            ctrl: e.ctrlKey,
-            meta: e.metaKey
-          };
-          keybindInput.textContent = this.getKeybindDisplay(newKeybind);
-        }
+      this.settings.showKeybindDialog(this.resultsContainer, (newKeybind) => {
+        this.keybind = newKeybind;
       });
-
-      const confirmBtn = dialogElement.querySelector('.confirm');
-      const cancelBtn = dialogElement.querySelector('.cancel');
-
-      confirmBtn.addEventListener('click', () => {
-        if (newKeybind) {
-          this.keybind = newKeybind;
-          window.postMessage({
-            type: 'SAVE_KEYBIND',
-            payload: newKeybind
-          }, window.location.origin);
-        }
-        dialogElement.remove();
-      });
-
-      cancelBtn.addEventListener('click', () => {
-        dialogElement.remove();
-      });
-
-      keybindInput.focus();
     }
 
-    getKeybindDisplay(kb = this.keybind) {
-      const parts = [];
-      if (kb.ctrl) parts.push('Ctrl');
-      if (kb.meta) parts.push('⌘');
-      parts.push(kb.key.toUpperCase());
-      return parts.join(' + ');
+    showSettingsDialog() {
+      this.settings.showSettingsDialog(this.resultsContainer, this);
+    }
+
+    async addSystemPrompt() {
+      ccLogger.group('System Prompt Generation');
+      
+      // Build base system prompt
+      let systemPrompt = `This is a smart chat bar a popup inside ${this.currentApp}. It can be used to ask questions, get help, and perform tasks.`;
+      systemPrompt += ' The current date and time is ' + new Date().toLocaleString();
+      systemPrompt += '. You can use the tools to perform tasks, chain them together to build context, and perform complex tasks.';
+      
+      // Add custom system prompt from settings if available
+      if (this.settings.systemPrompt) {
+          systemPrompt += '\n\nCustom Configuration Instructions:\n' + this.settings.systemPrompt;
+      }
+
+      // Get system prompts from both local and MCP tools
+      ccLogger.debug('Building system prompt with tools');
+      
+      // First get the tool scope
+      const scope = await this.toolCaller.getToolScope(this);
+      
+      // Then build the system prompt with the scope
+      systemPrompt = await this.toolCaller.buildSystemPrompt(systemPrompt, scope);
+      
+      // Add MCP-specific system prompts
+      for (const [serviceId, client] of this.mcpToolCaller.mcpClients.entries()) {
+          try {
+              if (client.getSystemPrompt) {
+                  systemPrompt = await client.getSystemPrompt(systemPrompt);
+              }
+          } catch (error) {
+              ccLogger.error(`Error getting MCP system prompt for ${serviceId}:`, error);
+          }
+      }
+
+      this.messages.push({
+          role: 'system',
+          content: systemPrompt
+      });
+      
+      ccLogger.debug('Final system prompt:', systemPrompt);
+      ccLogger.groupEnd();
     }
 }
 

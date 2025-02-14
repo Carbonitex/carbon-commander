@@ -1061,3 +1061,193 @@
         transform: translateY(0);
     }
 }
+
+.cc-settings-icon {
+    cursor: pointer;
+    line-height: 10px;
+    position: relative;
+    font-size: 21px;
+    top: -2px;
+    margin-left: 8px;
+    border-radius: 4px;
+    transition: background-color 0.2sease;
+}
+
+.cc-settings-icon:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.cc-settings-dialog {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 500px;
+    max-width: 90vw;
+    max-height: 90vh;
+    background-color: rebeccapurple;
+    border: 1px solid mediumorchid;
+    border-radius: 8px;
+    padding: 16px;
+    z-index: 1000001;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    overflow-y: auto;
+}
+
+.cc-settings-dialog h2 {
+    margin: 0 0 16px 0;
+    color: white;
+    font-size: 18px;
+    font-weight: 500;
+}
+
+.cc-settings-section {
+    margin-bottom: 24px;
+}
+
+.cc-settings-section h3 {
+    color: #79c1ff;
+    font-size: 16px;
+    margin: 0 0 12px 0;
+}
+
+.cc-settings-field {
+    margin-bottom: 16px;
+}
+
+.cc-settings-field label {
+    display: block;
+    color: white;
+    margin-bottom: 6px;
+    font-size: 14px;
+}
+
+.cc-settings-field textarea,
+.cc-settings-field input[type="text"] {
+    width: 100%;
+    padding: 8px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: white;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+    min-height: 80px;
+}
+
+.cc-settings-field input[type="text"] {
+    min-height: unset;
+}
+
+.cc-settings-field textarea:focus,
+.cc-settings-field input[type="text"]:focus {
+    border-color: #79c1ff;
+    outline: none;
+}
+
+.cc-key-value-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+
+.cc-key-value-table th,
+.cc-key-value-table td {
+    padding: 8px;
+    text-align: left;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.cc-key-value-table th {
+    background-color: rgba(0, 0, 0, 0.2);
+    color: #79c1ff;
+    font-weight: 500;
+}
+
+.cc-key-value-table td input {
+    width: 100%;
+    padding: 4px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: white;
+}
+
+.cc-key-value-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.cc-settings-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000000;
+}
+
+.cc-settings-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.cc-settings-dialog .cc-dialog {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 400px;
+    background-color: rebeccapurple;
+    border: 1px solid mediumorchid;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 1;
+}
+
+.cc-keybind-input {
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    padding: 12px;
+    margin: 12px 0;
+    color: white;
+    text-align: center;
+    font-size: 16px;
+    cursor: text;
+}
+
+.cc-keybind-input:focus {
+    border-color: #79c1ff;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(121, 193, 255, 0.2);
+}
+
+.cc-keybind-display {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    color: white;
+    font-family: monospace;
+}
+
+/* Update the keybind dialog buttons order in showKeybindDialog */
+.cc-dialog-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+/* Ensure consistent button order by using flex-direction */
+.cc-dialog-buttons {
+    flex-direction: row;
+}

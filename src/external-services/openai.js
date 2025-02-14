@@ -19,7 +19,9 @@ class OpenAIClient {
 
     async isAvailable() {
         if(OpenAIClient.isAvailable == null) {
-            let key = await CCLocalStorage.getEncrypted('openai_api_key');
+            // Get the key from the new encrypted storage location
+            const key = await CCLocalStorage.getEncrypted('encrypted_openai-key');
+            
             OpenAIClient.isAvailable = (key && key.length > 0);
             if(OpenAIClient.isAvailable) {
                 this.apiKey = key;

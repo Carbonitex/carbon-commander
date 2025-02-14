@@ -1,0 +1,104 @@
+---
+description: Guidelines for developing tools in CarbonCommander
+globs: ["src/tools/*.js"]
+---
+
+# Tool Development Guidelines
+
+## Tool Structure
+
+Every tool should follow this basic structure:
+```javascript
+static ToolName = {
+    function: {
+        name: 'tool_name',
+        description: 'Clear description of what the tool does',
+        parameters: {
+            properties: {
+                // parameter definitions
+            },
+            required: ['required_param_names']
+        }
+    },
+    execute: async function(scope, args) {
+        // implementation
+    }
+};
+```
+
+## Tool Naming Conventions
+
+- Use PascalCase for the static property name (e.g., `SearchWeb`)
+- Use snake_case for the function name (e.g., `search_web`)
+- Group related tools in appropriately named classes (e.g., `GeneralTools`, `BitbucketTools`)
+
+## Parameter Definitions
+
+- Always include a `description` for each parameter
+- Specify the correct `type` (`string`, `number`, `boolean`, etc.)
+- List all required parameters in the `required` array
+- Use descriptive parameter names that indicate their purpose
+
+Example:
+```javascript
+parameters: {
+    properties: {
+        query: {
+            type: 'string',
+            description: 'The search query'
+        },
+        max_results: {
+            type: 'number',
+            description: 'Maximum number of results to return'
+        }
+    },
+    required: ['query']
+}
+```
+
+## Tool Execution
+
+- Always use async/await in the execute function
+- Properly handle the scope and args parameters
+- Return standardized response objects:
+  ```javascript
+  // Success case
+  return { success: true, result: data };
+  
+  // Error case
+  return { success: false, error: error.message };
+  ```
+
+## Tool Filtering
+
+- Implement `_CarbonBarPageLoadFilter` to control when tools are available
+- Return `true` if the tool should always be available
+- Add specific logic for tools that should only be available in certain contexts
+
+## Scope Usage
+
+- Use the provided scope for accessing shared functionality
+- Log important information using `scope.logMessage`
+- Log errors using `scope.logError`
+- Access the command bar instance via `scope.bar`
+
+## Error Handling
+
+- Use try-catch blocks around all external operations
+- Provide meaningful error messages
+- Log errors appropriately
+- Handle edge cases gracefully
+
+## Documentation
+
+- Provide clear descriptions for tools and parameters
+- Include examples in comments for complex tools
+- Document any assumptions or requirements
+- Explain any side effects
+
+## Testing Considerations
+
+- Test tools with various input combinations
+- Verify error handling works correctly
+- Test integration with other tools
+- Ensure proper cleanup after tool execution 

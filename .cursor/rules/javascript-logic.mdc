@@ -1,0 +1,103 @@
+---
+description: "Javascript Code Project Description and Layout"
+globs: ["*.js", "*.jsx"]
+---
+Carbon Commander is a Chrome extension.
+
+## [carbon-commander.js](mdc:src/carbon-commander.js)
+
+AI-powered command palette interface. The core file `carbon-commander.js` is the main UI driver that:
+
+1. Creates a floating command palette UI accessible via keyboard shortcuts (default: Ctrl/Cmd+K)
+2. Integrates with multiple AI providers:
+   - OpenAI for cloud-based processing
+   - Ollama for local AI operations
+   - MCP (Model Context Protocol) for external service integration
+
+3. Key features:
+   - Real-time command processing with streaming responses
+   - Smart autocomplete and command history
+   - Extensible tool system for custom functionality
+   - Customizable keyboard shortcuts
+   - Markdown rendering for responses
+   - Persistent command history across sessions
+
+4. Architecture:
+   - Uses `ToolCaller` for local tool execution
+   - Uses `MCPToolCaller` for remote tool execution
+   - Manages AI provider connections and statuses
+   - Handles UI state and user interactions
+   - Provides dialog system for user input/confirmation
+
+The file acts as the central controller for the extension, managing both the UI and the communication between various components (AI services, tools, and the browser extension system).
+
+## [service.js](mdc:src/service.js)
+
+`service.js` is the content script bridge for Carbon Commander that:
+
+1. Injects the main extension UI (`carbon-commander.js`) into web pages
+2. Manages communication between:
+   - The webpage/UI
+   - Chrome extension background service
+   - Browser storage
+3. Handles core functionality:
+   - AI request routing
+   - Tool execution proxying
+   - Command history persistence
+   - Provider status updates (OpenAI/Ollama)
+   - Keybinding configuration
+
+It essentially acts as the middleware that connects the UI layer with Chrome's extension APIs and background services.
+
+
+## [chrome-ai-service.js](mdc:src/chrome-ai-service.js)
+
+`chrome-ai-service.js` is the background service worker for Carbon Commander that:
+
+1. Manages AI interactions by:
+   - Handling AI requests and responses
+   - Managing tool execution callbacks
+   - Processing streaming responses
+   - Coordinating between OpenAI and Ollama providers
+
+2. Provides core extension functionality:
+   - Extension installation handling
+   - Browser action (toolbar icon) click handling
+   - Message routing between tabs and content scripts
+   - Provider status management
+
+It serves as the central coordinator for all AI-related operations and extension-level functionality that needs to run in the background context.
+
+## [caller.js](mdc:src/external-services/caller.js)
+
+`caller.js` is the AI service orchestrator that:
+
+1. Manages AI provider integrations:
+   - Coordinates between OpenAI and Ollama clients
+   - Handles provider availability and fallbacks
+   - Manages model selection and mapping
+
+2. Provides unified interfaces for:
+   - Chat completions
+   - Tool conversions between providers
+   - Autocomplete functionality
+   - Quick text summarization
+   - Feature support checking
+
+## [tool-caller.js](mdc:src/tool-caller.js) and [mcp-tool-caller.js](mdc:src/mcp-tool-caller.js)
+
+`tool-caller.js`:
+- Manages local tool execution within the browser
+- Maintains a registry of built-in tools available in `window.sbaiTools`
+- Handles tool discovery, execution, and scope management for the current page
+- Provides methods to get, filter, and execute tools based on page context
+
+`mcp-tool-caller.js`:
+- Manages remote tool execution through Model Context Protocol (MCP) services
+- Handles connection to external MCP services with authentication
+- Discovers and wraps remote tools to match local tool interface
+- Maintains state of multiple MCP connections and their toolsets
+- Provides unified access to both local and remote tools through a consistent API
+
+
+

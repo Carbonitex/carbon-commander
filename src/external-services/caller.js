@@ -76,8 +76,7 @@ class AICaller {
             // Test the key before setting it
             await this.openai.testKey(key);
             
-            // If test passes, save the key and set it
-            await CCLocalStorage.setEncrypted('openai_api_key', key);
+            // If test passes, set it in the OpenAI client
             this.openai.setApiKey(key);
             this.setDefaultProvider('openai');
             ccLogger.info('OpenAI API key set successfully');
