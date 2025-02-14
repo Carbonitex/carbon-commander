@@ -3,7 +3,7 @@
  * Copyright (C) 2025 Carbonitex
  */
 
-import { ccLogger } from './global.js';
+import { ccLogger } from '../global.js';
 
 export class Settings {
     constructor() {
@@ -11,6 +11,7 @@ export class Settings {
         this.keyValuePairs = new Map();
         this.encryptedKeys = new Set(); // Track which keys are encrypted
         this.keybind = { key: 'k', ctrl: true, meta: false }; // Default keybind
+        this.postMessageHandler = null;
         
         // Add predefined openai-key
         this.keyValuePairs.set('openai-key', '');
@@ -18,8 +19,11 @@ export class Settings {
         
         // Add event listener for settings loaded
         window.addEventListener('message', this.handleSettingsMessage.bind(this));
-        
-        // Request initial settings
+    }
+
+    setPostMessageHandler(handler) {
+        this.postMessageHandler = handler;
+        // Now that we have the handler, we can load settings
         this.load();
     }
 
@@ -55,22 +59,32 @@ export class Settings {
     }
 
     async load() {
+        if (!this.postMessageHandler) {
+            ccLogger.error('Settings: postMessage handler not initialized');
+            return;
+        }
+
         try {
             // Request settings from service.js
-            window.postMessage({
+            this.postMessageHandler({
                 type: 'GET_SETTINGS'
-            }, window.location.origin);
+            });
 
             // Request keybind settings
-            window.postMessage({
+            this.postMessageHandler({
                 type: 'GET_KEYBIND'
-            }, window.location.origin);
+            });
         } catch (error) {
             ccLogger.error('Error loading settings:', error);
         }
     }
 
     async save() {
+        if (!this.postMessageHandler) {
+            ccLogger.error('Settings: postMessage handler not initialized');
+            return;
+        }
+
         try {
             // Convert Map to object for storage
             const settingsToSave = {
@@ -80,10 +94,10 @@ export class Settings {
             };
             
             // Send settings to service.js for storage
-            window.postMessage({
+            this.postMessageHandler({
                 type: 'SAVE_SETTINGS',
                 payload: settingsToSave
-            }, window.location.origin);
+            });
         } catch (error) {
             ccLogger.error('Error saving settings:', error);
         }
@@ -98,11 +112,16 @@ export class Settings {
     }
 
     setKeybind(newKeybind) {
+        if (!this.postMessageHandler) {
+            ccLogger.error('Settings: postMessage handler not initialized');
+            return;
+        }
+
         this.keybind = newKeybind;
-        window.postMessage({
+        this.postMessageHandler({
             type: 'SAVE_KEYBIND',
             payload: newKeybind
-        }, window.location.origin);
+        });
     }
 
     showKeybindDialog(container, onKeybindChange) {

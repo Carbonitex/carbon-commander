@@ -1,4 +1,4 @@
-import { ccLogger } from '../global.js';
+import { ccLogger } from '../../global.js';
 
 class OllamaClient {
     static FAST_MODEL = "mistral-small";
@@ -238,7 +238,11 @@ class OllamaClient {
     async ensureModelAvailable(modelName, progressCallback = null) {
         ccLogger.debug(`Ensuring model availability: ${modelName}`);
         const models = await this.getModelsList();
-        const modelExists = models.some(m => m.name === modelName);
+        let modelExists = models.some(m => m.name === modelName);
+        if(!modelExists) {
+            //contains the model name
+            modelExists = models.some(m => m.name.includes(modelName));
+        }
 
         if (!modelExists) {
             ccLogger.info(`Model ${modelName} not found, starting download`);

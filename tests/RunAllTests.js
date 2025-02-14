@@ -1,4 +1,4 @@
-import { ccLogger } from '../global.js';
+import { ccLogger } from '../src/global.js';
 import { runHackerNewsTests } from './tools/external/HackerNewsToolsTest.js';
 import { runJiraTests } from './tools/external/JiraToolsTest.js';
 

@@ -155,9 +155,7 @@
 }
 
 .cc-result-item {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
+
 }
 
 .cc-result-item > p {
@@ -1250,4 +1248,146 @@
 /* Ensure consistent button order by using flex-direction */
 .cc-dialog-buttons {
     flex-direction: row;
+}
+
+/* Social Metadata Styles */
+.social-metadata-container {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 8px 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.social-metadata-section {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 12px;
+    margin: 8px 0;
+}
+
+.social-metadata-section h3 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    color: #79c1ff;
+    font-weight: 500;
+}
+
+.metadata-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.metadata-image {
+    margin: 8px 0;
+    border-radius: 6px;
+    overflow: hidden;
+    max-width: 100%;
+}
+
+.metadata-image img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+.metadata-title {
+    font-size: 18px;
+    font-weight: 500;
+    color: white;
+}
+
+.metadata-description {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.metadata-author,
+.metadata-site,
+.metadata-creator,
+.metadata-type {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.metadata-canonical a {
+    color: #79c1ff;
+    text-decoration: none;
+    font-size: 13px;
+}
+
+.metadata-canonical a:hover {
+    text-decoration: underline;
+}
+
+/* Platform-specific styling */
+.social-metadata-section.facebook {
+    border-left: 3px solid #1877f2;
+}
+
+.social-metadata-section.twitter {
+    border-left: 3px solid #1da1f2;
+}
+
+.social-metadata-section.linkedin {
+    border-left: 3px solid #0a66c2;
+}
+
+.social-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.social-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    color: white;
+    text-decoration: none;
+    font-size: 13px;
+    transition: background-color 0.2s ease;
+}
+
+.social-link:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.social-link.facebook::before {
+    content: '📘';
+    margin-right: 6px;
+}
+
+.social-link.twitter::before {
+    content: '🐦';
+    margin-right: 6px;
+}
+
+.social-link.linkedin::before {
+    content: '💼';
+    margin-right: 6px;
+}
+
+.social-link.instagram::before {
+    content: '📸';
+    margin-right: 6px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+    .social-metadata-container {
+        padding: 12px;
+    }
+
+    .metadata-title {
+        font-size: 16px;
+    }
+
+    .metadata-description {
+        font-size: 13px;
+    }
 }

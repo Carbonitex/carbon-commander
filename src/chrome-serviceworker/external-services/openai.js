@@ -1,5 +1,5 @@
 import CCLocalStorage from '../local-storage.js';
-import { ccLogger } from '../global.js';
+import { ccLogger } from '../../global.js';
 
 class OpenAIClient {
     static FAST_MODEL = "gpt-4o-mini";

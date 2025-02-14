@@ -14,7 +14,7 @@
       "https://*/*"
     ],
     "background": {
-      "service_worker": "chrome-ai-service.js",
+      "service_worker": "chrome-serviceworker.js",
       "type": "module"
     },
     "action": {
@@ -33,14 +33,18 @@
       {
         "matches": ["<all_urls>"],
         "css": ["carbon-commander.css"],
-        "js": ["service-dist.js"],
+        "js": ["service.js"],
         "run_at": "document_end",
         "all_frames": true
       }
     ],
     "web_accessible_resources": [
       {
-        "resources": ["carbon-commander-dist.js"],
+        "resources": [
+          "carbon-commander.js",
+          "secure-messaging.js",
+          "service.js"
+        ],
         "matches": ["<all_urls>"]
       }
     ]

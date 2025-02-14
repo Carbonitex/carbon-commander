@@ -66,6 +66,7 @@ It essentially acts as the middleware that connects the UI layer with Chrome's e
    - Message routing between tabs and content scripts
    - Provider status management
 
+[service.js](mdc:src/chrome-extension/service.js) calls on this worker to execute AI requests on external AI services.
 It serves as the central coordinator for all AI-related operations and extension-level functionality that needs to run in the background context.
 
 ## [caller.js](mdc:src/external-services/caller.js)
@@ -98,6 +99,45 @@ It serves as the central coordinator for all AI-related operations and extension
 - Discovers and wraps remote tools to match local tool interface
 - Maintains state of multiple MCP connections and their toolsets
 - Provides unified access to both local and remote tools through a consistent API
+
+## [secure-messaging.js]([secure-messaging.js](mdc:src/chrome-carbonbar-page/secure-messaging.js))
+
+`secure-messaging.js` is the security layer that:
+
+1. Implements secure message passing between components:
+   - Uses HMAC signatures for message verification
+   - Implements key ratcheting for forward secrecy
+   - Manages secure channels for message transport
+
+2. Provides core security features:
+   - Message integrity verification
+   - Secure key derivation
+   - Message counter tracking
+   - Channel lifecycle management
+
+3. Handles initialization and setup:
+   - Initial key import and setup
+   - Secure channel creation
+   - Message queue management
+   - Replacement of standard postMessage
+
+It serves as the security foundation for all communication between the webpage and extension components.
+
+## Security Architecture
+
+The extension implements a layered security model:
+
+1. Message Security:
+   - All inter-component communication is secured using HMAC signatures
+   - Key ratcheting provides forward secrecy
+   - Secure channels isolate message flows
+
+2. Extension Security:
+   - Content Security Policy (CSP) controls
+   - Minimal required permissions model
+   - Secure storage for sensitive data
+   - Isolated execution contexts
+
 
 
 

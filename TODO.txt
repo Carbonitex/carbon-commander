@@ -1,12 +1,7 @@
 include /src/tools/external/_TODO.txt
 
 
-BUG: Ollama may not be working but I think its a local issue.
-
 (for me) TODO: Test MCP, It's all AI generated and I'vnt touched any of it yet.
-
-TODO: Code was added to configure the keybinds by AI but I haven't tested it yet.
-- A Ctrl+K is a common keybind, maybe pick another default?
 
 TODO: Add a way to manually call tools from the chat.
 - if they are clicked from the tool list it creates a widget with inputs to fill out
@@ -15,3 +10,9 @@ TODO: Add a way to manually call tools from the chat.
 
 BUG: Github has keybinds that conflict with the command palette, stealing the input.
 IDEA: Tool suggestions while they are typing? Or maybe as a secondary prompt after the AI answer.
+
+TODO: Make autocomplete better.
+- Maybe it could request a list of responses and show multiple choices?
+- Should it generate a summary of messages and inputs as they come in, use that as context?
+
+TODO: finish user confirmation for user data.

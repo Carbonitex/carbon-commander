@@ -1,4 +1,4 @@
-import { ccLogger } from '../global.js';
+import { ccLogger } from '../src/global.js';
 
 class TestRunner {
     static async runTest(testName, testFn) {

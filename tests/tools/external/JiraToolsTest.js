@@ -1,5 +1,5 @@
 import { TestRunner } from '../../TestRunner.js';
-import { JiraTools } from '../../../tools/external/JiraTools.js';
+import { JiraTools } from '../../../src/tools/external/JiraTools.js';
 
 const tests = [
     {

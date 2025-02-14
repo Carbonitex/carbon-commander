@@ -1,4 +1,5 @@
 class CCLocalStorage {
+    // TODO: Make this a random key based on something from chrome thats unique to the extension
     static #pass = 'CarbonLocalSecurityKey';
     
     static async setEncrypted(key, value) {

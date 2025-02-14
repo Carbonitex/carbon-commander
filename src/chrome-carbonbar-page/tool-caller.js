@@ -1,4 +1,4 @@
-import { ccLogger } from './global.js';
+import { ccLogger } from '../global.js';
 
 class ToolCaller {
 
@@ -45,6 +45,9 @@ class ToolCaller {
         ccLogger.group('Building Tool Scope');
         var scope = {
             bar: bar,
+            settings: {
+                keyValuePairs: bar.settings?.keyValuePairs || new Map()
+            },
             logMessage: (message, important = false) => {
                 if(important) {
                     ccLogger.info('[ToolScope] ' + message);
@@ -54,6 +57,22 @@ class ToolCaller {
             },
             logError: (message) => {
                 ccLogger.error('[ToolScope] ' + message);
+            },
+            promptUserForConfirmation: async (args) => {
+                const { prompt, default_value } = args;
+                return new Promise((resolve) => {
+                    // Generate a unique ID for this request
+                    const requestId = Math.random().toString(36).substr(2, 9);
+
+                    // Send message to command bar to show confirmation dialog
+                    bar.postMessage({
+                        type: 'SHOW_CONFIRMATION_DIALOG',
+                        payload: {
+                            requestId: requestId,
+                            prompt: prompt
+                        }
+                    });
+                });
             }
         }
         //Apply the current toolsets scope functions

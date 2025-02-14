@@ -1,5 +1,5 @@
 import { TestRunner } from '../../TestRunner.js';
-import { HackerNewsTools } from '../../../tools/external/HackerNewsTools.js';
+import { HackerNewsTools } from '../../../src/tools/external/HackerNewsTools.js';
 
 const tests = [
     {

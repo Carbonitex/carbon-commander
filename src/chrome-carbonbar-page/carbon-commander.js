@@ -20,9 +20,8 @@
 import { marked } from 'marked';
 import ToolCaller from './tool-caller.js';
 import MCPToolCaller from './mcp-tool-caller.js';
-import { AICallerModels } from './external-services/caller.js';
-import { CarbonBarHelpTools } from './tools/CarbonBarHelpTools.js';
-import { ccLogger } from './global.js';
+import { CarbonBarHelpTools } from '../tools/CarbonBarHelpTools.js';
+import { ccLogger, AICallerModels } from '../global.js';
 import settings from './settings.js';
 import styles from './carbon-commander.css';
 
@@ -33,6 +32,9 @@ class CarbonCommander {
       this.mcpToolCaller = MCPToolCaller;
       this.settings = settings;
       this.keybind = settings.keybind;
+      this.authTokenInitialized = false;
+      this.initializationComplete = false;
+      this.messageQueue = [];
 
       var tabId = document.querySelector('meta[name="tabId"]').getAttribute('content');
       ccLogger.info("Initializing with tabId:", tabId);
@@ -86,9 +88,16 @@ class CarbonCommander {
       this.historyIndex = -1;
       this.hasNoAIMode = false;
       this.connectedProviders = new Set();
-      this.loadCommandHistory(); // Load history when initializing
+      
+      // Setup event listeners first
       this.setupEventListeners();
-      this.init();
+      
+      // Set up settings with postMessage handler
+      this.settings.setPostMessageHandler((message) => this.postMessage(message));
+      
+      // Initialize after event listeners are set up
+      this.initialize();
+      
       document.body.appendChild(this.root);
 
       // Update autocomplete properties with better defaults
@@ -107,6 +116,28 @@ class CarbonCommander {
       // Add MCP status tracking
       this.mcpStatusInterval = null;
       this.startMCPStatusChecks();
+    }
+
+    async initialize() {
+      // Request settings first to get auth token
+      this.postMessage({ type: 'GET_SETTINGS' });
+      
+      // Wait for auth token to be initialized
+      await new Promise(resolve => {
+        const checkAuthToken = () => {
+          if (this.authTokenInitialized) {
+            resolve();
+          } else {
+            setTimeout(checkAuthToken, 50);
+          }
+        };
+        checkAuthToken();
+      });
+
+      // Now that we have the auth token, load command history and initialize
+      this.loadCommandHistory();
+      await this.init();
+      this.initializationComplete = true;
     }
 
     startMCPStatusChecks() {
@@ -175,13 +206,13 @@ class CarbonCommander {
           }
           
           // Toggle provider status
-          window.postMessage({
+          this.postMessage({
             type: 'TOGGLE_PROVIDER',
             payload: {
               provider,
               enabled: !isEnabled
             }
-          }, window.location.origin);
+          });
         });
       });
 
@@ -248,7 +279,7 @@ class CarbonCommander {
       settingsIcon.addEventListener('click', () => this.showSettingsDialog());
 
       // Load settings
-      await this.loadSettings();
+      await this.settings.load();
     }
   
     setupEventListeners() {
@@ -276,6 +307,18 @@ class CarbonCommander {
       });
 
       window.addEventListener("message", async (event) => {
+        // Handle settings loaded message first to get auth token
+        if (event.data.type === 'SETTINGS_LOADED') {
+          ccLogger.debug('SETTINGS_LOADED', event.data.payload);
+          if (event.data.payload?._authToken) {
+            this.authToken = event.data.payload._authToken;
+            this.authTokenInitialized = true;
+            ccLogger.debug('AUTH_TOKEN_INITIALIZED', this.authToken);
+            delete event.data.payload._authToken; // Remove token from settings object
+          }
+          // Continue with normal settings handling...
+        }
+
         if (event.data.type === 'AI_EXECUTE_TOOL') {
 
           const toolName = event.data.tool.name;
@@ -285,36 +328,27 @@ class CarbonCommander {
           const tool = this.toolCaller.getTool(toolName);
           if (!tool) {
             ccLogger.error(`Tool not found: ${toolName}`);
-            window.postMessage(
-              { 
-                type: 'AI_TOOL_RESPONSE', 
-                payload: { result: `Tool not found: ${toolName}` }
-              },
-              window.location.origin
-            );
+            this.postMessage({ 
+              type: 'AI_TOOL_RESPONSE', 
+              payload: { result: `Tool not found: ${toolName}` }
+            });
             return;
           }
           try {
             const result = await tool.execute(await this.toolCaller.getToolScope(this), toolArgs);
             ccLogger.debug("AI_EXECUTE_TOOL result:", result);
-            window.postMessage(
-              { type: 'AI_TOOL_RESPONSE', payload: result },
-              window.location.origin
-            );
+            this.postMessage({ type: 'AI_TOOL_RESPONSE', payload: result });
           } catch (error) {
             ccLogger.error('Tool execution error:', error);
-            window.postMessage(
-              { 
-                type: 'AI_TOOL_RESPONSE', 
-                payload: {
-                  success: false,
-                  error: error.message,
-                  content: error.message,
-                  tool_call_id: tool?.id
-                }
-              },
-              window.location.origin
-            );
+            this.postMessage({ 
+              type: 'AI_TOOL_RESPONSE', 
+              payload: {
+                success: false,
+                error: error.message,
+                content: error.message,
+                tool_call_id: tool?.id
+              }
+            });
           }
         }
 
@@ -669,14 +703,10 @@ Tell them that they can refresh the page to enter normal mode.`;
         keepAlive: '30m',
         provider: 'openai'
       };
-      window.postMessage(
-        { 
-          type: "AI_REQUEST", 
-          payload: request,
-          tabId: window.tabId
-        },
-        window.location.origin
-      );
+      this.postMessage({ 
+        type: "AI_REQUEST", 
+        payload: request
+      });
     }
 
     async noAIModeOllamaInputRespond(){
@@ -712,14 +742,10 @@ Available tools are being limited. For more advanced features, recommend connect
         keepAlive: '30m',
         provider: 'ollama'
       };
-      window.postMessage(
-        { 
-          type: "AI_REQUEST", 
-          payload: request,
-          tabId: window.tabId
-        },
-        window.location.origin
-      );
+      this.postMessage({ 
+        type: "AI_REQUEST", 
+        payload: request
+      });
     }
 
     async noAIModeInputHandler(messages) {
@@ -854,15 +880,11 @@ Available tools are being limited. For more advanced features, recommend connect
               keepAlive: '30m'
             };
 
-            // Send message to ai-service
-            window.postMessage(
-              { 
-                type: "AI_REQUEST", 
-                payload: request,
-                tabId: window.tabId
-              },
-              window.location.origin
-            );
+            // Send message to ai-service using postMessage helper
+            this.postMessage({ 
+              type: "AI_REQUEST", 
+              payload: request
+            });
           }
 
           //The messages will come in via previously setup event listeners
@@ -983,14 +1005,13 @@ Available tools are being limited. For more advanced features, recommend connect
             container.classList.remove('processing');
             container.classList.add('waiting-input');
             
-            window.postMessage({
+            this.postMessage({
                 type: 'CONFIRMATION_DIALOG_RESPONSE',
                 payload: {
                     tool_call_id: callback,
                     confirmed: true
-                },
-                tabId: window.tabId
-            }, window.location.origin);
+                }
+            });
             this.handleDialogResponse(true);
             
             // Remove dialog element
@@ -1003,14 +1024,13 @@ Available tools are being limited. For more advanced features, recommend connect
             container.classList.remove('processing');
             container.classList.add('waiting-input');
             
-            window.postMessage({
+            this.postMessage({
                 type: 'CONFIRMATION_DIALOG_RESPONSE',
                 payload: {
                     tool_call_id: callback,
                     confirmed: false
-                },
-                tabId: window.tabId
-            }, window.location.origin);
+                }
+            });
             this.handleDialogResponse(false);
             
             // Remove dialog element
@@ -1064,14 +1084,13 @@ Available tools are being limited. For more advanced features, recommend connect
         const cancelBtn = dialogElement.querySelector('.cancel');
 
         const submitDialog = () => {
-            window.postMessage({
+            this.postMessage({
                 type: 'INPUT_DIALOG_RESPONSE',
                 payload: {
                     tool_call_id: config.tool_call_id,
                     input: input.value
-                },
-                tabId: window.tabId
-            }, window.location.origin);
+                }
+            });
             this.handleDialogResponse(input.value, dialogId);
         };
 
@@ -1086,14 +1105,13 @@ Available tools are being limited. For more advanced features, recommend connect
         confirmBtn.addEventListener('click', submitDialog);
 
         cancelBtn.addEventListener('click', () => {
-            window.postMessage({
+            this.postMessage({
                 type: 'INPUT_DIALOG_RESPONSE',
                 payload: {
                     tool_call_id: config.tool_call_id,
                     input: null
-                },
-                tabId: window.tabId
-            }, window.location.origin);
+                }
+            });
             this.handleDialogResponse(null, dialogId);
         });
 
@@ -1130,8 +1148,7 @@ Available tools are being limited. For more advanced features, recommend connect
     // Add new methods to handle command history persistence
     async loadCommandHistory() {
       try {
-        // Send message to service.js to get the command history
-        window.postMessage({ type: "GET_COMMAND_HISTORY" }, window.location.origin);
+        this.postMessage({ type: "GET_COMMAND_HISTORY" });
       } catch (error) {
         ccLogger.error('Error loading command history:', error);
       }
@@ -1139,14 +1156,10 @@ Available tools are being limited. For more advanced features, recommend connect
 
     async saveCommandHistory() {
       try {
-        // Send message to service.js to save the command history
-        window.postMessage(
-          { 
-            type: "SAVE_COMMAND_HISTORY", 
-            payload: this.commandHistory 
-          }, 
-          window.location.origin
-        );
+        this.postMessage({ 
+          type: "SAVE_COMMAND_HISTORY", 
+          payload: this.commandHistory 
+        });
       } catch (error) {
         ccLogger.error('Error saving command history:', error);
       }
@@ -1205,28 +1218,24 @@ Available tools are being limited. For more advanced features, recommend connect
     }
 
     newAutocompleteRequest(input, requestId) {
-        // Clear any pending autocomplete request
         if (this.autocompleteDebounceTimer) {
             clearTimeout(this.autocompleteDebounceTimer);
             this.autocompleteDebounceTimer = null;
         }
 
-        // Store the current input for comparison
         this.lastAutocompleteInput = input;
         
-        // Debounce the autocomplete request
         this.autocompleteDebounceTimer = setTimeout(async () => {
             try {
-                // Only proceed if this is still the current request
                 if (requestId === this.currentAutocompleteRequestId) {
                     this.lastAutocompleteRequest = Date.now();
-                    window.postMessage({
+                    this.postMessage({
                         type: 'GET_AUTOCOMPLETE',
                         payload: {
                             ...this.getAutocompleteContext(input),
                             requestId: requestId
                         }
-                    }, window.location.origin);
+                    });
                 }
             } catch (error) {
                 ccLogger.error('Autocomplete error:', error);
@@ -1289,16 +1298,12 @@ Available tools are being limited. For more advanced features, recommend connect
         this.ollamaCheckInterval = setInterval(async () => {
           try {
             ccLogger.debug('Checking Ollama availability', { noAIMode: this.hasNoAIMode });
-            window.postMessage(
-              { 
-                type: "CHECK_OLLAMA_AVAILABLE",
-                tabId: window.tabId,
-                payload: {
-                  noAIMode: this.hasNoAIMode
-                }
-              },
-              window.location.origin
-            );
+            this.postMessage({ 
+              type: "CHECK_OLLAMA_AVAILABLE",
+              payload: {
+                noAIMode: this.hasNoAIMode
+              }
+            });
           } catch (error) {
             ccLogger.error('Ollama check failed:', error);
           }
@@ -1604,6 +1609,34 @@ Available tools are being limited. For more advanced features, recommend connect
       ccLogger.debug('Final system prompt:', systemPrompt);
       ccLogger.groupEnd();
     }
+
+    // Modify postMessage helper method to use secure messaging
+    postMessage(message) {
+      // Prefix all carbonbar messages to identify them
+      const carbonMessage = {
+        ...message,
+        type: 'CARBON_' + message.type,
+        tabId: window.tabId
+      };
+
+      // Use the secure messaging system
+      window.postMessage(carbonMessage, window.location.origin);
+
+      // Process queued messages if initialization is complete
+      if (this.initializationComplete && this.messageQueue.length > 0) {
+        while (this.messageQueue.length > 0) {
+          const queuedMessage = this.messageQueue.shift();
+          this.postMessage(queuedMessage);
+        }
+      }
+    }
+
+    // Add the missing loadSettings method
+    async loadSettings() {
+      // This method is no longer needed since we're using the settings.load() method
+      // Keeping it for backward compatibility
+      await this.settings.load();
+    }
 }
 
 
@@ -1611,7 +1644,7 @@ function importAll(r) {
   r.keys().forEach(r);
 }
 
-importAll(require.context('./tools', true, /\.js$/));
+importAll(require.context('../tools', true, /\.js$/));
 
 const carbonCommander = new CarbonCommander();
 

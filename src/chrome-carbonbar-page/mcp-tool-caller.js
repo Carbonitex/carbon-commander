@@ -1,4 +1,4 @@
-import { ccLogger } from './global.js';
+import { ccLogger } from '../global.js';
 
 class MCPToolCaller {
     constructor() {

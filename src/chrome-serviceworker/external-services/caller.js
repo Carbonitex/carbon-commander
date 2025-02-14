@@ -1,26 +1,8 @@
 import OllamaClient from './ollama.js';
 import OpenAIClient from './openai.js';
 import CCLocalStorage from '../local-storage.js';
-import { ccLogger } from '../global.js';
+import { ccLogger, AICallerModels } from '../../global.js';
 
-const AICallerModels = {
-    ['FAST']: {
-        ollama: 'qwen2.5:14b',
-        openai: 'gpt-4o-mini'
-    },
-    ['REASON']: {
-        ollama: "deepseek-r1:70b",
-        openai: "o3-mini"
-    },
-    ['VISION']: {
-        ollama: "llama3.2-vision",
-        openai: "gpt-4o"
-    },
-    ['AUTOCOMPLETE']: {
-        ollama: 'mistral-small',//"qwen2.5:1.5b",
-        openai: "gpt-4o-mini"
-    }
-}
 
 class AICaller {
     constructor() {
