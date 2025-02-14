@@ -19,15 +19,21 @@ class OpenAIClient {
 
     async isAvailable() {
         if(OpenAIClient.isAvailable == null) {
-            // Get the key from the new encrypted storage location
-            const key = await CCLocalStorage.getEncrypted('encrypted_openai-key');
-            
-            OpenAIClient.isAvailable = (key && key.length > 0);
-            if(OpenAIClient.isAvailable) {
-                this.apiKey = key;
-                ccLogger.info('OpenAI is available and configured');
-            } else {
-                ccLogger.warn('OpenAI is not available - no API key found');
+            try {
+                // Get the key from the new encrypted storage location
+                const key = await CCLocalStorage.getEncrypted('encrypted_openai-key');
+                
+                OpenAIClient.isAvailable = (key && key.length > 0);
+                if(OpenAIClient.isAvailable) {
+                    this.apiKey = key;
+                    ccLogger.info('OpenAI is available and configured');
+                } else {
+                    ccLogger.warn('OpenAI is not available - no API key found');
+                }
+            } catch (error) {
+                ccLogger.error('Error checking OpenAI availability:', error);
+                OpenAIClient.isAvailable = false;
+                this.apiKey = '';
             }
         }
         return OpenAIClient.isAvailable;

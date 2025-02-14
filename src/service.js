@@ -5,92 +5,81 @@ const inIframe = window.self !== window.top;
 
 async function initializeStorage() {
   try {
-    // Migrate OpenAI key if needed
-    await migrateOpenAIKey();
-
     // Load all stored values
-    const [
-      settings,
-      commandHistory,
-      keybind
-    ] = await Promise.all([
-      CCLocalStorage.get('carbonbar_settings'),
-      CCLocalStorage.get('carbonbar_command_history'),
-      CCLocalStorage.get('carbonbar_keybind')
-    ]);
+    let settings, commandHistory, keybind;
+    try {
+      [settings, commandHistory, keybind] = await Promise.all([
+        CCLocalStorage.get('carbonbar_settings'),
+        CCLocalStorage.get('carbonbar_command_history'),
+        CCLocalStorage.get('carbonbar_keybind')
+      ]);
+    } catch (error) {
+      ccLogger.error('Error loading storage values:', error);
+      settings = {};
+      commandHistory = [];
+      keybind = { key: 'k', ctrl: true, meta: false };
+    }
 
     // Send all initial values to the window
-    if (settings) {
-      window.postMessage({
-        type: 'SETTINGS_LOADED',
-        payload: settings
-      }, window.location.origin);
+    try {
+      if (settings) {
+        window.postMessage({
+          type: 'SETTINGS_LOADED',
+          payload: settings
+        }, window.location.origin);
 
-      // Check for OpenAI key in new location
-      if (settings.encryptedKeys?.includes('openai-key')) {
-        const openaiKey = await CCLocalStorage.getEncrypted('encrypted_openai-key');
-        if (openaiKey) {
-          window.postMessage({
-            type: 'PROVIDER_STATUS_UPDATE',
-            provider: 'openai',
-            status: true
-          }, window.location.origin);
+        // Check for OpenAI key in new location
+        if (settings.encryptedKeys?.includes('openai-key')) {
+          try {
+            const openaiKey = await CCLocalStorage.getEncrypted('encrypted_openai-key');
+            if (openaiKey) {
+              window.postMessage({
+                type: 'PROVIDER_STATUS_UPDATE',
+                provider: 'openai',
+                status: true
+              }, window.location.origin);
+            } else {
+              // Key was in settings but not found in storage, clean up settings
+              try {
+                settings.encryptedKeys = settings.encryptedKeys.filter(k => k !== 'openai-key');
+                delete settings.keyValuePairs['openai-key'];
+                await CCLocalStorage.set('carbonbar_settings', settings);
+              } catch (cleanupError) {
+                ccLogger.error('Error cleaning up settings:', cleanupError);
+              }
+            }
+          } catch (error) {
+            ccLogger.error('Error getting OpenAI key:', error);
+            // Try to clean up settings on error
+            try {
+              settings.encryptedKeys = settings.encryptedKeys.filter(k => k !== 'openai-key');
+              delete settings.keyValuePairs['openai-key'];
+              await CCLocalStorage.set('carbonbar_settings', settings);
+            } catch (cleanupError) {
+              ccLogger.error('Error cleaning up settings after key error:', cleanupError);
+            }
+          }
         }
       }
-    }
 
-    if (commandHistory) {
-      window.postMessage({
-        type: 'COMMAND_HISTORY_LOADED',
-        payload: commandHistory
-      }, window.location.origin);
-    }
+      if (commandHistory) {
+        window.postMessage({
+          type: 'COMMAND_HISTORY_LOADED',
+          payload: commandHistory
+        }, window.location.origin);
+      }
 
-    if (keybind) {
-      window.postMessage({
-        type: 'SET_KEYBIND',
-        payload: keybind
-      }, window.location.origin);
+      if (keybind) {
+        window.postMessage({
+          type: 'SET_KEYBIND',
+          payload: keybind
+        }, window.location.origin);
+      }
+    } catch (error) {
+      ccLogger.error('Error sending initial values to window:', error);
     }
   } catch (error) {
-    ccLogger.error('Error initializing storage:', error);
-  }
-}
-
-async function migrateOpenAIKey() {
-  try {
-    // Check if we have an old key to migrate
-    const oldKey = await CCLocalStorage.getEncrypted('openai_api_key');
-    if (!oldKey) {
-      return; // No key to migrate
-    }
-
-    // Get current settings
-    const settings = await CCLocalStorage.get('carbonbar_settings') || {};
-    settings.keyValuePairs = settings.keyValuePairs || {};
-    settings.encryptedKeys = settings.encryptedKeys || [];
-
-    // Check if key is already migrated
-    if (settings.encryptedKeys.includes('openai-key')) {
-      // Already migrated, clean up old key
-      await CCLocalStorage.remove('openai_api_key');
-      return;
-    }
-
-    // Store key in new location
-    await CCLocalStorage.setEncrypted('encrypted_openai-key', oldKey);
-
-    // Update settings
-    settings.encryptedKeys.push('openai-key');
-    settings.keyValuePairs['openai-key'] = '••••••••'; // Placeholder for UI
-    await CCLocalStorage.set('carbonbar_settings', settings);
-
-    // Clean up old key
-    await CCLocalStorage.remove('openai_api_key');
-
-    ccLogger.info('Successfully migrated OpenAI key to new encrypted storage');
-  } catch (error) {
-    ccLogger.error('Error migrating OpenAI key:', error);
+    ccLogger.error('Error in initializeStorage:', error);
   }
 }
 
@@ -250,44 +239,66 @@ if (!window.carbonBarInjected && !inIframe) {
 
     if (event.data.type === "SET_OPENAI_KEY") {
       ccLogger.debug('SET_OPENAI_KEY', event.data.payload);
-      chrome.runtime.sendMessage(
-        { 
-          type: 'SET_OPENAI_KEY', 
-          payload: event.data.payload,
-          tabId: event.data.tabId 
-        },
-        async (response) => {
-          ccLogger.debug('SET_OPENAI_KEY_RESPONSE and PROVIDER_STATUS_UPDATE', response.success);
-          if(response.success){
-            // Add the key to settings as an encrypted value
-            window.postMessage({
-              type: 'ENCRYPT_VALUE',
-              payload: { 
-                key: 'openai-key', 
-                value: event.data.payload.key 
+      try {
+        chrome.runtime.sendMessage(
+          { 
+            type: 'SET_OPENAI_KEY', 
+            payload: event.data.payload,
+            tabId: event.data.tabId 
+          },
+          async (response) => {
+            try {
+              ccLogger.debug('SET_OPENAI_KEY_RESPONSE and PROVIDER_STATUS_UPDATE', response?.success);
+              if(response?.success){
+                try {
+                  // Add the key to settings as an encrypted value
+                  window.postMessage({
+                    type: 'ENCRYPT_VALUE',
+                    payload: { 
+                      key: 'openai-key', 
+                      value: event.data.payload.key 
+                    }
+                  }, window.location.origin);
+
+                  // Update settings to track this as an encrypted key
+                  const settings = await CCLocalStorage.get('carbonbar_settings') || {};
+                  settings.keyValuePairs = settings.keyValuePairs || {};
+                  settings.encryptedKeys = settings.encryptedKeys || [];
+                  if (!settings.encryptedKeys.includes('openai-key')) {
+                    settings.encryptedKeys.push('openai-key');
+                  }
+                  await CCLocalStorage.set('carbonbar_settings', settings);
+
+                  window.postMessage({
+                    type: 'PROVIDER_STATUS_UPDATE',
+                    provider: 'openai',
+                    status: true
+                  }, window.location.origin);
+                } catch (error) {
+                  ccLogger.error('Error saving OpenAI key to settings:', error);
+                }
               }
-            }, window.location.origin);
 
-            // Update settings to track this as an encrypted key
-            const settings = await CCLocalStorage.get('carbonbar_settings') || {};
-            settings.keyValuePairs = settings.keyValuePairs || {};
-            settings.encryptedKeys = settings.encryptedKeys || [];
-            settings.encryptedKeys.push('openai-key');
-            await CCLocalStorage.set('carbonbar_settings', settings);
-
-            window.postMessage({
-              type: 'PROVIDER_STATUS_UPDATE',
-              provider: 'openai',
-              status: true
-            }, window.location.origin);
+              window.postMessage({
+                type: 'SET_OPENAI_KEY_RESPONSE',
+                payload: response?.success || false
+              }, window.location.origin);
+            } catch (error) {
+              ccLogger.error('Error handling OpenAI key response:', error);
+              window.postMessage({
+                type: 'SET_OPENAI_KEY_RESPONSE',
+                payload: false
+              }, window.location.origin);
+            }
           }
-
-          window.postMessage({
-            type: 'SET_OPENAI_KEY_RESPONSE',
-            payload: response.success
-          }, window.location.origin);
-        }
-      );
+        );
+      } catch (error) {
+        ccLogger.error('Error sending SET_OPENAI_KEY message:', error);
+        window.postMessage({
+          type: 'SET_OPENAI_KEY_RESPONSE',
+          payload: false
+        }, window.location.origin);
+      }
     }
 
     if (event.data.type === "CHECK_OLLAMA_AVAILABLE") {
@@ -387,6 +398,15 @@ if (!window.carbonBarInjected && !inIframe) {
         ccLogger.debug('Value encrypted successfully:', key);
       } catch (error) {
         ccLogger.error('Error encrypting value:', error);
+        // Try to clean up settings if encryption fails
+        try {
+          const settings = await CCLocalStorage.get('carbonbar_settings') || {};
+          settings.encryptedKeys = (settings.encryptedKeys || []).filter(k => k !== key);
+          delete settings.keyValuePairs[key];
+          await CCLocalStorage.set('carbonbar_settings', settings);
+        } catch (cleanupError) {
+          ccLogger.error('Error cleaning up settings after encryption error:', cleanupError);
+        }
       }
     }
 

@@ -12,6 +12,10 @@ export class Settings {
         this.encryptedKeys = new Set(); // Track which keys are encrypted
         this.keybind = { key: 'k', ctrl: true, meta: false }; // Default keybind
         
+        // Add predefined openai-key
+        this.keyValuePairs.set('openai-key', '');
+        this.encryptedKeys.add('openai-key');
+        
         // Add event listener for settings loaded
         window.addEventListener('message', this.handleSettingsMessage.bind(this));
         
@@ -32,9 +36,15 @@ export class Settings {
                             settings.keyValuePairs : 
                             Object.entries(settings.keyValuePairs)
                     );
+                    // Ensure openai-key is always present
+                    if (!this.keyValuePairs.has('openai-key')) {
+                        this.keyValuePairs.set('openai-key', '');
+                    }
                 }
                 if (settings.encryptedKeys) {
                     this.encryptedKeys = new Set(settings.encryptedKeys);
+                    // Ensure openai-key is always encrypted
+                    this.encryptedKeys.add('openai-key');
                 }
             }
         }
@@ -255,7 +265,7 @@ export class Settings {
                                     <td><input type="text" value="${key}" class="kv-key" ${this.encryptedKeys.has(key) ? 'readonly' : ''}></td>
                                     <td>
                                         ${this.encryptedKeys.has(key) ? 
-                                            '<div class="encrypted-value">••••••••</div>' :
+                                            `<div class="encrypted-value">${(!value || value.trim() === '') ? '<span style="color: #ff9999; font-style: italic;">Not Set</span>' : '••••••••'}</div>` :
                                             `<input type="text" value="${value}" class="kv-value">`
                                         }
                                     </td>
@@ -351,8 +361,33 @@ export class Settings {
                 });
                 
                 inputDialog.querySelector('.confirm').addEventListener('click', async () => {
-                    const newValue = input.value;
+                    const newValue = input.value.trim();
                     if (newValue) {
+                        if (key === 'openai-key') {
+                            // Test OpenAI key before saving
+                            window.postMessage({
+                                type: 'SET_OPENAI_KEY',
+                                payload: { key: newValue }
+                            }, window.location.origin);
+
+                            // Listen for the response
+                            const response = await new Promise(resolve => {
+                                const listener = (event) => {
+                                    if (event.data.type === 'SET_OPENAI_KEY_RESPONSE') {
+                                        window.removeEventListener('message', listener);
+                                        resolve(event.data.payload);
+                                    }
+                                };
+                                window.addEventListener('message', listener);
+                            });
+
+                            if (!response) {
+                                ccLogger.error('Failed to set OpenAI key');
+                                inputDialog.remove();
+                                return;
+                            }
+                        }
+                        
                         // Send message to update encrypted value
                         window.postMessage({
                             type: 'UPDATE_ENCRYPTED_VALUE',
@@ -369,13 +404,14 @@ export class Settings {
         const confirmBtn = dialog.querySelector('.confirm');
         confirmBtn.addEventListener('click', async () => {
             // Save system prompt
-            this.systemPrompt = dialog.querySelector('#system-prompt').value;
+            this.systemPrompt = dialog.querySelector('#system-prompt').value.trim();
             
             // Save key-value pairs
             const newPairs = new Map();
             const newEncryptedKeys = new Set();
             
-            dialog.querySelectorAll('.cc-key-value-table tbody tr').forEach(row => {
+            const rows = dialog.querySelectorAll('.cc-key-value-table tbody tr');
+            for (const row of rows) {
                 const key = row.querySelector('.kv-key').value.trim();
                 const valueInput = row.querySelector('.kv-value');
                 const encryptToggle = row.querySelector('.encrypt-toggle');
@@ -383,25 +419,52 @@ export class Settings {
                 if (key) {
                     if (this.encryptedKeys.has(key)) {
                         // Keep existing encrypted value
-                        newPairs.set(key, this.keyValuePairs.get(key));
+                        const existingValue = this.keyValuePairs.get(key);
+                        newPairs.set(key, typeof existingValue === 'string' ? existingValue.trim() : existingValue);
                         newEncryptedKeys.add(key);
                     } else if (valueInput) {
-                        const value = valueInput.value.trim();
-                        if (value) {
-                            newPairs.set(key, value);
-                            // Check if this should be encrypted
-                            if (encryptToggle && encryptToggle.checked) {
-                                newEncryptedKeys.add(key);
-                                // Send message to encrypt value
-                                window.postMessage({
-                                    type: 'ENCRYPT_VALUE',
-                                    payload: { key, value }
-                                }, window.location.origin);
+                        const value = valueInput.value;
+                        if (value !== undefined && value !== null) {
+                            const trimmedValue = typeof value === 'string' ? value.trim() : value;
+                            if (trimmedValue !== '') {
+                                // If this is the OpenAI key and it's being encrypted, test it first
+                                if (key === 'openai-key' && encryptToggle?.checked) {
+                                    const response = await new Promise(resolve => {
+                                        window.postMessage({
+                                            type: 'SET_OPENAI_KEY',
+                                            payload: { key: trimmedValue }
+                                        }, window.location.origin);
+
+                                        const listener = (event) => {
+                                            if (event.data.type === 'SET_OPENAI_KEY_RESPONSE') {
+                                                window.removeEventListener('message', listener);
+                                                resolve(event.data.payload);
+                                            }
+                                        };
+                                        window.addEventListener('message', listener);
+                                    });
+
+                                    if (!response) {
+                                        ccLogger.error('Failed to set OpenAI key');
+                                        continue;
+                                    }
+                                }
+
+                                newPairs.set(key, trimmedValue);
+                                // Check if this should be encrypted
+                                if (encryptToggle && encryptToggle.checked) {
+                                    newEncryptedKeys.add(key);
+                                    // Send message to encrypt value
+                                    window.postMessage({
+                                        type: 'ENCRYPT_VALUE',
+                                        payload: { key, value: trimmedValue }
+                                    }, window.location.origin);
+                                }
                             }
                         }
                     }
                 }
-            });
+            }
             
             this.keyValuePairs = newPairs;
             this.encryptedKeys = newEncryptedKeys;

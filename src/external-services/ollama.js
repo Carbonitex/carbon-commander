@@ -34,7 +34,19 @@ class OllamaClient {
 
         ccLogger.debug('Checking Ollama availability');
         try {
-            const response = await fetch(`http://${this.hostEndpoint}/api/version`);
+            const response = await fetch(`${this.hostEndpoint}/api/version`, {
+                headers: {
+                    'Origin': chrome.runtime.getURL(''),
+                }
+            });
+            
+            if (response.status === 403) {
+                ccLogger.error('Ollama CORS error - Origin not allowed. Please add chrome-extension://* to OLLAMA_ORIGINS');
+                ccLogger.error('Current origin:', chrome.runtime.getURL(''));
+                this.available = false;
+                return false;
+            }
+            
             this.available = response.ok;
             ccLogger.info(`Ollama availability check: ${this.available ? 'Available' : 'Not available'}`);
             
@@ -71,8 +83,10 @@ class OllamaClient {
     }
     
     get hostEndpoint() {
-        //on macos: launchctl setenv OLLAMA_ORIGINS "*"
-        return 'localhost:11434'
+        //Note: OLLAMA_ORIGINS is configured in the environment
+        //export OLLAMA_ORIGINS="chrome-extension://*"
+        //launchctl setenv OLLAMA_ORIGINS "chrome-extension://*" should be done on MACOS
+        return 'http://127.0.0.1:11434'
     }
 
     async getHttpClient() {
@@ -84,7 +98,18 @@ class OllamaClient {
     async getModelsList() {
         ccLogger.debug('Fetching Ollama models list');
         try {
-            const response = await fetch(`http://${this.hostEndpoint}/api/tags`);
+            const response = await fetch(`${this.hostEndpoint}/api/tags`, {
+                headers: {
+                    'Origin': chrome.runtime.getURL('')
+                }
+            });
+            
+            if (response.status === 403) {
+                ccLogger.error('Ollama CORS error - Origin not allowed. Please add chrome-extension://* to OLLAMA_ORIGINS');
+                ccLogger.error('Current origin:', chrome.runtime.getURL(''));
+                return [];
+            }
+            
             const data = await response.json();
             ccLogger.debug(`Found ${data.models?.length || 0} models`);
             return data.models;
@@ -99,13 +124,20 @@ class OllamaClient {
         ccLogger.debug(`Starting download for model: ${modelName}`);
         
         try {
-            const response = await fetch(`http://${this.hostEndpoint}/api/pull`, {
+            const response = await fetch(`${this.hostEndpoint}/api/pull`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Origin': chrome.runtime.getURL('')
                 },
                 body: JSON.stringify({ name: modelName })
             });
+
+            if (response.status === 403) {
+                ccLogger.error('Ollama CORS error - Origin not allowed. Please add chrome-extension://* to OLLAMA_ORIGINS');
+                ccLogger.error('Current origin:', chrome.runtime.getURL(''));
+                throw new Error('CORS error - Origin not allowed. Please add chrome-extension://* to OLLAMA_ORIGINS');
+            }
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
@@ -368,7 +400,7 @@ class OllamaClient {
         };
 
         try {
-            const response = await fetch(`http://${this.hostEndpoint}/api/chat`, {
+            const response = await fetch(`${this.hostEndpoint}/api/chat`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -376,9 +408,16 @@ class OllamaClient {
                     'Accept-Encoding': 'gzip',
                     'Accept-Charset': 'utf-8',
                     'Accept-Language': 'en-US',
+                    'Origin': chrome.runtime.getURL('')
                 },
                 body: JSON.stringify(request)
             });
+
+            if (response.status === 403) {
+                ccLogger.error('Ollama CORS error - Origin not allowed. Please add chrome-extension://* to OLLAMA_ORIGINS');
+                ccLogger.error('Current origin:', chrome.runtime.getURL(''));
+                throw new Error('CORS error - Origin not allowed. Please add chrome-extension://* to OLLAMA_ORIGINS');
+            }
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();

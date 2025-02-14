@@ -462,7 +462,7 @@ class CarbonCommander {
                         <li>Download and install <a href="https://ollama.ai" target="_blank">Ollama</a></li>
                         <li>Run Ollama locally</li>
                         <li>For macOS users, enable external connections:</li>
-                        <li><code>launchctl setenv OLLAMA_ORIGINS "*"</code></li>
+                        <li><code>launchctl setenv OLLAMA_ORIGINS "chrome-extension://*"</code></li>
                     </ul>
                 </div>
 

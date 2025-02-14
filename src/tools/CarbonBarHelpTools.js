@@ -125,7 +125,7 @@ Need more help? Try:
 3. Install and run Ollama
 4. For macOS users, enable external connections:
    \`\`\`bash
-   launchctl setenv OLLAMA_ORIGINS "*"
+   launchctl setenv OLLAMA_ORIGINS "chrome-extension://*"
    \`\`\`
 5. Restart Ollama after setting OLLAMA_ORIGINS
 
