@@ -5,6 +5,18 @@ class HackerNewsTools {
         return window.location.hostname.includes('news.ycombinator.com');
     }
 
+    static _CarbonBarBuildScope = async (scope) => {
+        try{
+            var articleName = document.querySelector('.titleline a');
+            scope.appName = `HackerNews [${articleName}]`;
+        } catch (error) {
+            scope.logError('Error building scope', error);
+            scope.appName = 'HackerNews [Unknown Article]';
+        }
+
+        return scope;
+    }
+
     static ReadPage = {
         function: {
             name: 'read_hn_page',

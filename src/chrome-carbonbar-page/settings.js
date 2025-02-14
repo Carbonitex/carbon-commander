@@ -93,6 +93,19 @@ export class Settings {
                 encryptedKeys: Array.from(this.encryptedKeys)
             };
             
+            // Save encrypted values first
+            for (const [key, value] of this.keyValuePairs.entries()) {
+                if (this.encryptedKeys.has(key)) {
+                    await this.postMessageHandler({
+                        type: 'SAVE_ENCRYPTED_VALUE',
+                        payload: {
+                            key: key,
+                            value: value
+                        }
+                    });
+                }
+            }
+            
             // Send settings to service.js for storage
             this.postMessageHandler({
                 type: 'SAVE_SETTINGS',
@@ -384,20 +397,26 @@ export class Settings {
                     if (newValue) {
                         if (key === 'openai-key') {
                             // Test OpenAI key before saving
-                            window.postMessage({
+                            this.postMessageHandler({
                                 type: 'SET_OPENAI_KEY',
                                 payload: { key: newValue }
-                            }, window.location.origin);
+                            });
 
                             // Listen for the response
                             const response = await new Promise(resolve => {
                                 const listener = (event) => {
-                                    if (event.data.type === 'SET_OPENAI_KEY_RESPONSE') {
+                                    if (event.data.type === 'PROVIDER_STATUS_UPDATE' && 
+                                        event.data.provider === 'openai') {
                                         window.removeEventListener('message', listener);
-                                        resolve(event.data.payload);
+                                        resolve(event.data.status);
                                     }
                                 };
                                 window.addEventListener('message', listener);
+                                // Add timeout
+                                setTimeout(() => {
+                                    window.removeEventListener('message', listener);
+                                    resolve(false);
+                                }, 5000);
                             });
 
                             if (!response) {
@@ -408,13 +427,16 @@ export class Settings {
                         }
                         
                         // Send message to update encrypted value
-                        window.postMessage({
+                        this.postMessageHandler({
                             type: 'UPDATE_ENCRYPTED_VALUE',
                             payload: { key, value: newValue }
-                        }, window.location.origin);
+                        });
                         
                         this.keyValuePairs.set(key, newValue);
+                        this.encryptedKeys.add(key);
+                        await this.save();
                         inputDialog.remove();
+                        overlay.remove(); // Close the entire settings dialog on success
                     }
                 });
             }

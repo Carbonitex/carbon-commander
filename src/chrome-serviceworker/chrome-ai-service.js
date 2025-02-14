@@ -90,7 +90,7 @@ async function handleAIRequest(tabId, request) {
 
               ccLogMessage('[handleAIRequest] CHUNK:', chunk);
               const formattedChunk = {
-                type: 'FROM_BACKGROUND',
+                type: 'AI_RESPONSE_CHUNK',
                 payload: {
                     content: chunk,
                     isFinished: typeof chunk === 'object' ? chunk.finish_reason == 'tool_calls' : false
@@ -108,7 +108,7 @@ async function handleAIRequest(tabId, request) {
 
         // Send final chunk to indicate completion
         await chrome.tabs.sendMessage(tabId, {
-            type: 'FROM_BACKGROUND',
+            type: 'AI_RESPONSE_CHUNK',
             payload: {
                 content: '',
                 isFinished: true,
@@ -123,7 +123,7 @@ async function handleAIRequest(tabId, request) {
         messages.push({ role: 'assistant', content: error.message });
         // Send error message to tab
         await chrome.tabs.sendMessage(tabId, {
-            type: 'FROM_BACKGROUND',
+            type: 'AI_RESPONSE_ERROR',
             payload: {
                 content: error.message,
                 isFinished: true,
@@ -176,9 +176,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             })
             .catch(error => {
                 ccLogError('Error:', error);
-                sendResponse({ error: error.message });
+                sendResponse({ error: error.message || 'Unknown error' });
             });
-        return true;
+        return true; // Keep message channel open
     }
 
     if (message.type === 'GET_TAB_ID') {
@@ -201,14 +201,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.type === 'SET_OPENAI_KEY') {
-        setOpenAIKeyIndex++;
-        ccLogMessage('SET_OPENAI_KEY2', message.payload);
-        AICaller.setOpenAIKey(message.payload.key).then(success => {
-          sendResponse({ success: success });
-        }).catch(error => {
-          ccLogError('Error setting OpenAI key:', error);
-          sendResponse({ success: false, error: error.message });
-        });
+        (async () => {
+            setOpenAIKeyIndex++;
+            ccLogMessage('SET_OPENAI_KEY2', message.payload);
+            try {
+                const success = await AICaller.setOpenAIKey(message.payload.key);
+                if (success) {
+                    // Send provider status update
+                    chrome.tabs.sendMessage(sender.tab.id, {
+                        type: 'PROVIDER_STATUS_UPDATE',
+                        provider: 'openai',
+                        status: true
+                    });
+                }
+                sendResponse({ success });
+            } catch (error) {
+                ccLogError('Error setting OpenAI key:', error);
+                sendResponse({ success: false, error: error.message });
+            }
+        })();
         return true;
     }
 

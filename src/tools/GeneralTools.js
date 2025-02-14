@@ -284,6 +284,7 @@ class GeneralTools {
                     mainContent = document.querySelector(body_query_selector);
                 }
                 
+                // TODO: If this is too long, we should cut it off at 20000 words, then mention that it was cut off and how much more
                 const content = {
                     text: mainContent.textContent.trim(),
                     wordCount: mainContent.textContent.trim().split(/\s+/).length,

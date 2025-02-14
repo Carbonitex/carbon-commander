@@ -116,6 +116,9 @@ class CarbonCommander {
       // Add MCP status tracking
       this.mcpStatusInterval = null;
       this.startMCPStatusChecks();
+
+      // Initialize settings and auth token
+      this.postMessage({ type: 'GET_SETTINGS' });
     }
 
     async initialize() {
@@ -319,10 +322,9 @@ class CarbonCommander {
           // Continue with normal settings handling...
         }
 
-        if (event.data.type === 'AI_EXECUTE_TOOL') {
-
-          const toolName = event.data.tool.name;
-          const toolArgs = event.data.tool.arguments;
+        if (event.data.type === 'AI_EXECUTE_TOOL' || event.data.type === 'CARBON_AI_EXECUTE_TOOL') {
+          const toolName = event.data.payload.tool.name;
+          const toolArgs = event.data.payload.tool.arguments;
 
           ccLogger.debug('Received tool execution request:', toolName, toolArgs);
           const tool = this.toolCaller.getTool(toolName);
@@ -330,31 +332,48 @@ class CarbonCommander {
             ccLogger.error(`Tool not found: ${toolName}`);
             this.postMessage({ 
               type: 'AI_TOOL_RESPONSE', 
-              payload: { result: `Tool not found: ${toolName}` }
+              payload: { 
+                success: false,
+                result: `Tool not found: ${toolName}`,
+                error: `Tool not found: ${toolName}`
+              }
             });
             return;
           }
           try {
             const result = await tool.execute(await this.toolCaller.getToolScope(this), toolArgs);
             ccLogger.debug("AI_EXECUTE_TOOL result:", result);
-            this.postMessage({ type: 'AI_TOOL_RESPONSE', payload: result });
+            // Send tool response through secure messaging
+            this.postMessage({ 
+              type: 'AI_TOOL_RESPONSE', 
+              payload: {
+                ...result,
+                name: toolName,
+                arguments: toolArgs
+              }
+            });
           } catch (error) {
             ccLogger.error('Tool execution error:', error);
+            // Send error through secure messaging
             this.postMessage({ 
               type: 'AI_TOOL_RESPONSE', 
               payload: {
                 success: false,
                 error: error.message,
                 content: error.message,
-                tool_call_id: tool?.id
+                tool_call_id: tool?.id,
+                name: toolName,
+                arguments: toolArgs
               }
             });
           }
         }
 
+        // Handle AI responses
         if (event.data.type === 'AI_RESPONSE_CHUNK' || 
+            event.data.type === 'CARBON_AI_RESPONSE_CHUNK' ||
             event.data.type === 'AI_RESPONSE_ERROR' || 
-            event.data.type === 'FROM_BACKGROUND') {
+            event.data.type === 'CARBON_AI_RESPONSE_ERROR') {
             this.handleAIResponse(event.data);
         }
 
@@ -1612,11 +1631,18 @@ Available tools are being limited. For more advanced features, recommend connect
 
     // Modify postMessage helper method to use secure messaging
     postMessage(message) {
+      // If we don't have an auth token yet and this isn't a settings request, queue the message
+      if (!this.authTokenInitialized && message.type !== 'GET_SETTINGS') {
+        this.messageQueue.push(message);
+        return;
+      }
+
       // Prefix all carbonbar messages to identify them
       const carbonMessage = {
         ...message,
         type: 'CARBON_' + message.type,
-        tabId: window.tabId
+        tabId: window.tabId,
+        authToken: this.authToken
       };
 
       // Use the secure messaging system
@@ -1636,6 +1662,23 @@ Available tools are being limited. For more advanced features, recommend connect
       // This method is no longer needed since we're using the settings.load() method
       // Keeping it for backward compatibility
       await this.settings.load();
+    }
+
+    // Add method to handle settings loaded
+    handleSettingsLoaded(settings) {
+      if (settings._authToken) {
+        this.authToken = settings._authToken;
+        this.authTokenInitialized = true;
+        console.log('AUTH_TOKEN_INITIALIZED', this.authToken);
+        
+        // Process any queued messages now that we have the auth token
+        while (this.messageQueue.length > 0) {
+          const message = this.messageQueue.shift();
+          this.postMessage(message);
+        }
+        
+        this.initializationComplete = true;
+      }
     }
 }
 
