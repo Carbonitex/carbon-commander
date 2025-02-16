@@ -15,6 +15,7 @@ export class Settings {
         this.encryptedKeys = new Map(); // Track which keys are encrypted and if they have a non-empty value
         this.keybind = ccDefaultKeybind; // Default keybind
         this.mcpConfigurations = new Map(); // Store MCP service configurations
+        this.refreshInProgress = false; // Flag to prevent concurrent refresh operations
         
         // Add event listener for settings loaded
         window.addEventListener('message', this.handleSettingsMessage.bind(this));
@@ -98,6 +99,7 @@ export class Settings {
         }
 
         try {
+            ccLogger.group('Saving settings');
             // Convert Map to object for storage
             const settingsToSave = {
                 systemPrompt: this.systemPrompt,
@@ -145,6 +147,7 @@ export class Settings {
             // Save MCP configurations with encrypted API keys
             for (const [serviceId, config] of this.mcpConfigurations.entries()) {
                 if (config.apiKey) {
+                    ccLogger.debug(`Saving encrypted API key for MCP service: ${serviceId}`);
                     await this._postMessageHandler({
                         type: 'SAVE_ENCRYPTED_VALUE',
                         payload: {
@@ -169,6 +172,7 @@ export class Settings {
                 type: 'SAVE_SETTINGS',
                 payload: settingsToSave
             });
+            ccLogger.groupEnd();
         } catch (error) {
             ccLogger.error('Error saving settings:', error);
         }
@@ -365,6 +369,47 @@ export class Settings {
                     <button class="cc-button" id="change-keybind">Change Shortcut</button>
                 </div>
             </div>
+
+            <div class="cc-settings-section">
+                <h3>MCP Services</h3>
+                <div class="cc-settings-field">
+                    <table class="cc-key-value-table mcp-services-table">
+                        <thead>
+                            <tr>
+                                <th>Service ID</th>
+                                <th>Endpoint</th>
+                                <th>API Key</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${Array.from(this.mcpConfigurations || []).map(([serviceId, config]) => `
+                                <tr>
+                                    <td><input type="text" value="${serviceId}" class="mcp-service-id" readonly></td>
+                                    <td><input type="text" value="${config.endpoint}" class="mcp-endpoint"></td>
+                                    <td>
+                                        <div class="encrypted-value">
+                                            ${config.apiKey ? '••••••••' : '<span style="color: #ff9999; font-style: italic;">Not Set</span>'}
+                                        </div>
+                                        <button class="cc-button update-mcp-key">Update Key</button>
+                                    </td>
+                                    <td>
+                                        <span class="mcp-status ${config.status || 'disconnected'}">${config.status || 'disconnected'}</span>
+                                    </td>
+                                    <td>
+                                        <button class="cc-button delete-mcp-service">Delete</button>
+                                        <button class="cc-button toggle-mcp-service">${config.status === 'connected' ? 'Disconnect' : 'Connect'}</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                    <div class="cc-key-value-actions">
+                        <button class="cc-button" id="add-mcp-service">Add MCP Service</button>
+                    </div>
+                </div>
+            </div>
             
             <div class="cc-settings-section key-value-pairs-section">
                 <h3>Configuration Key-Value Pairs</h3>
@@ -483,6 +528,31 @@ export class Settings {
             }
         });
         
+        // Add MCP service management handlers
+        const addMCPServiceBtn = dialog.querySelector('#add-mcp-service');
+        addMCPServiceBtn.addEventListener('click', () => {
+            const tbody = dialog.querySelector('.mcp-services-table tbody');
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td><input type="text" class="mcp-service-id" placeholder="service-id"></td>
+                <td><input type="text" class="mcp-endpoint" placeholder="https://example.com"></td>
+                <td>
+                    <div class="encrypted-value">
+                        <span style="color: #ff9999; font-style: italic;">Not Set</span>
+                    </div>
+                    <button class="cc-button update-mcp-key">Set Key</button>
+                </td>
+                <td>
+                    <span class="mcp-status disconnected">disconnected</span>
+                </td>
+                <td>
+                    <button class="cc-button delete-mcp-service">Delete</button>
+                    <button class="cc-button toggle-mcp-service">Connect</button>
+                </td>
+            `;
+            tbody.appendChild(newRow);
+        });
+        
         dialog.addEventListener('click', async (e) => {
             if (e.target.classList.contains('delete-hostname-prompt')) {
                 const row = e.target.closest('tr');
@@ -559,6 +629,89 @@ export class Settings {
                         
                     inputDialog.remove();
                 });
+            }
+
+            if (e.target.classList.contains('delete-mcp-service')) {
+                const row = e.target.closest('tr');
+                const serviceId = row.querySelector('.mcp-service-id').value;
+                await this.removeMCPService(serviceId);
+                row.remove();
+            }
+
+            if (e.target.classList.contains('update-mcp-key')) {
+                const row = e.target.closest('tr');
+                const serviceId = row.querySelector('.mcp-service-id').value;
+                
+                // Show input dialog for new API key
+                const inputDialog = document.createElement('div');
+                inputDialog.classList.add('cc-dialog');
+                inputDialog.innerHTML = `
+                    <div class="cc-dialog-content">
+                        <h3>Update MCP API Key</h3>
+                        <div class="cc-input-group">
+                            <label>New API key for ${serviceId}:</label>
+                            <input type="password" class="cc-dialog-input">
+                        </div>
+                        <div class="cc-dialog-buttons">
+                            <button class="cc-button cancel">Cancel</button>
+                            <button class="cc-button confirm">Update</button>
+                        </div>
+                    </div>
+                `;
+                
+                dialog.appendChild(inputDialog);
+                
+                const input = inputDialog.querySelector('.cc-dialog-input');
+                input.focus();
+                
+                inputDialog.querySelector('.cancel').addEventListener('click', () => {
+                    inputDialog.remove();
+                });
+                
+                inputDialog.querySelector('.confirm').addEventListener('click', async () => {
+                    const newValue = input.value.trim();
+                    if (newValue) {
+                        const config = this.mcpConfigurations.get(serviceId) || {};
+                        config.apiKey = newValue;
+                        await this.configureMCPService({
+                            serviceId,
+                            endpoint: config.endpoint,
+                            apiKey: newValue,
+                            options: config.options
+                        });
+                        
+                        const encryptedValue = row.querySelector('.encrypted-value');
+                        encryptedValue.innerHTML = '••••••••';
+                    }
+                    inputDialog.remove();
+                });
+            }
+
+            if (e.target.classList.contains('toggle-mcp-service')) {
+                const row = e.target.closest('tr');
+                const serviceId = row.querySelector('.mcp-service-id').value;
+                const endpoint = row.querySelector('.mcp-endpoint').value;
+                const statusSpan = row.querySelector('.mcp-status');
+                const toggleBtn = e.target;
+
+                if (statusSpan.textContent === 'connected') {
+                    // Disconnect
+                    await carbonCommander.mcpToolCaller.disconnectMCPService(serviceId);
+                    statusSpan.textContent = 'disconnected';
+                    statusSpan.className = 'mcp-status disconnected';
+                    toggleBtn.textContent = 'Connect';
+                } else {
+                    // Connect
+                    const config = this.mcpConfigurations.get(serviceId);
+                    if (config) {
+                        const success = await carbonCommander.mcpToolCaller.connectMCPService(serviceId);
+                        if (success) {
+                            statusSpan.textContent = 'connected';
+                            statusSpan.className = 'mcp-status connected';
+                            toggleBtn.textContent = 'Disconnect';
+                        }
+                    }
+                }
             }
         });
         
@@ -661,6 +814,67 @@ export class Settings {
         
         overlay.appendChild(dialog);
         document.body.appendChild(overlay);
+    }
+
+    // New method to handle MCP configuration
+    async configureMCPService(serviceConfig) {
+        const { serviceId, endpoint, apiKey, options = {} } = serviceConfig;
+        
+        ccLogger.debug(`Configuring MCP service: ${serviceId}`);
+        
+        try {
+            const config = {
+                endpoint,
+                apiKey,
+                options,
+                status: 'configured'
+            };
+
+            this.mcpConfigurations.set(serviceId, config);
+            await this.save();
+            return true;
+        } catch (error) {
+            ccLogger.error(`Error configuring MCP service ${serviceId}:`, error);
+            return false;
+        }
+    }
+
+    // New method to remove MCP configuration
+    async removeMCPService(serviceId) {
+        ccLogger.debug(`Removing MCP service: ${serviceId}`);
+        
+        try {
+            // Remove from configurations
+            this.mcpConfigurations.delete(serviceId);
+            
+            // Remove encrypted API key
+            await this._postMessageHandler({
+                type: 'DELETE_ENCRYPTED_VALUE',
+                payload: {
+                    key: `mcp-key-${serviceId}`
+                }
+            });
+            
+            await this.save();
+            return true;
+        } catch (error) {
+            ccLogger.error(`Error removing MCP service ${serviceId}:`, error);
+            return false;
+        }
+    }
+
+    // New method to get MCP service configuration
+    getMCPServiceConfig(serviceId) {
+        return this.mcpConfigurations.get(serviceId);
+    }
+
+    // New method to list all MCP services
+    getMCPServices() {
+        return Array.from(this.mcpConfigurations.entries()).map(([id, config]) => ({
+            id,
+            endpoint: config.endpoint,
+            options: config.options
+        }));
     }
 }
 

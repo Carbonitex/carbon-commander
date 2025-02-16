@@ -8,13 +8,32 @@ class MCPToolCaller {
         this.mcpConfig = new Map(); // Map of MCP service configurations
         this.mcpToolsets = new Map(); // Map of MCP-provided toolsets
         this.reconnectInterval = null;
+        this.refreshInProgress = false; // Flag to prevent concurrent refresh operations
         this.startReconnectInterval();
+        
+        // Load saved configurations on startup
+        this.loadSavedConfigurations().catch(error => {
+            ccLogger.error('Failed to load saved MCP configurations:', error);
+        });
     }
 
     startReconnectInterval() {
         // Check connections every 30 seconds
-        this.reconnectInterval = setInterval(() => {
-            this.refreshMCPConnections();
+        this.reconnectInterval = setInterval(async () => {
+            // Skip if a refresh operation is already in progress
+            if (this.refreshInProgress) {
+                ccLogger.debug('Skipping MCP connection refresh - another refresh operation is in progress');
+                return;
+            }
+            
+            try {
+                this.refreshInProgress = true;
+                await this.refreshMCPConnections();
+            } catch (error) {
+                ccLogger.error('Error during MCP connection refresh:', error);
+            } finally {
+                this.refreshInProgress = false;
+            }
         }, 30000);
     }
 
@@ -229,8 +248,8 @@ class MCPToolCaller {
         };
     }
 
-    async disconnectMCPService(serviceId) {
-        ccLogger.debug(`Disconnecting from MCP service: ${serviceId}`);
+    async disconnectMCPService(serviceId, permanent = false) {
+        ccLogger.debug(`Disconnecting from MCP service: ${serviceId}${permanent ? ' (permanent)' : ' (temporary)'}`);
         
         const client = this.mcpClients.get(serviceId);
         if (client) {
@@ -249,9 +268,11 @@ class MCPToolCaller {
                     config.status = 'disconnected';
                 }
 
-                // Remove from settings if permanent
-                settings.mcpConfigurations.delete(serviceId);
-                await settings.save();
+                // Remove from settings only if permanent
+                if (permanent) {
+                    settings.mcpConfigurations.delete(serviceId);
+                    await settings.save();
+                }
 
                 return true;
             } catch (error) {
@@ -268,10 +289,10 @@ class MCPToolCaller {
             throw new Error(`MCP client ${serviceId} not connected`);
         }
 
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), timeout);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
 
+        try {
             const response = await fetch(`${client.endpoint}/execute`, {
                 method: 'POST',
                 headers: {
@@ -285,8 +306,6 @@ class MCPToolCaller {
                 signal: controller.signal
             });
 
-            clearTimeout(timeoutId);
-
             if (!response.ok) {
                 throw new Error(`MCP call failed: ${response.statusText}`);
             }
@@ -299,6 +318,8 @@ class MCPToolCaller {
             }
             ccLogger.error(`Error calling MCP function ${functionName}:`, error);
             throw error;
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
 
@@ -484,13 +505,16 @@ class MCPToolCaller {
             return false;
         }
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
         try {
             const response = await fetch(`${client.endpoint}/status`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${this.mcpConfig.get(serviceId).apiKey}`
                 },
-                timeout: 5000
+                signal: controller.signal
             });
 
             if (!response.ok) {
@@ -500,37 +524,54 @@ class MCPToolCaller {
             const status = await response.json();
             return status.healthy === true;
         } catch (error) {
-            ccLogger.error(`Health check failed for MCP service ${serviceId}:`, error);
+            if (error.name === 'AbortError') {
+                ccLogger.error(`Health check timed out after 5000ms for MCP service ${serviceId}`);
+            } else {
+                ccLogger.error(`Health check failed for MCP service ${serviceId}:`, error);
+            }
             return false;
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
 
     async refreshMCPConnections() {
-        ccLogger.debug('Refreshing all MCP connections');
-        const results = [];
-        for (const [serviceId, config] of this.mcpConfig.entries()) {
-            // First check health of existing connection
-            if (this.mcpClients.has(serviceId)) {
-                const isHealthy = await this.checkMCPHealth(serviceId);
-                if (!isHealthy) {
-                    ccLogger.warn(`Unhealthy MCP service detected: ${serviceId}, attempting reconnect`);
-                    await this.disconnectMCPService(serviceId);
+        if (this.refreshInProgress) {
+            ccLogger.debug('Skipping MCP connection refresh - another refresh operation is in progress');
+            return [];
+        }
+
+        try {
+            this.refreshInProgress = true;
+            ccLogger.debug('Refreshing all MCP connections');
+            const results = [];
+            for (const [serviceId, config] of this.mcpConfig.entries()) {
+                // First check health of existing connection
+                if (this.mcpClients.has(serviceId)) {
+                    const isHealthy = await this.checkMCPHealth(serviceId);
+                    if (!isHealthy) {
+                        ccLogger.warn(`Unhealthy MCP service detected: ${serviceId}, attempting reconnect`);
+                        await this.disconnectMCPService(serviceId, false); // Use temporary disconnection
+                    }
+                }
+
+                // Reconnect if needed
+                if (config.status === 'connected' || config.options.autoReconnect) {
+                    results.push({
+                        serviceId,
+                        success: await this.connectMCPService(serviceId)
+                    });
                 }
             }
-
-            // Reconnect if needed
-            if (config.status === 'connected' || config.options.autoReconnect) {
-                results.push({
-                    serviceId,
-                    success: await this.connectMCPService(serviceId)
-                });
-            }
+            return results;
+        } finally {
+            this.refreshInProgress = false;
         }
-        return results;
     }
 
     cleanup() {
         this.stopReconnectInterval();
+        this.refreshInProgress = false; // Reset the flag during cleanup
         // Disconnect all services
         for (const [serviceId] of this.mcpClients) {
             this.disconnectMCPService(serviceId);

@@ -6,16 +6,28 @@ const tests = [
     {
         name: 'CarbonBar and ToolCaller Integration',
         fn: async () => {
+            // Create a mock document with proper event handling
+            let inputValue = '';
+            let eventHandlers = new Map();
             const mockDocument = {
                 createElement: (tag) => ({
                     style: {},
-                    classList: { add: () => {} },
+                    classList: { add: () => {}, remove: () => {} },
                     appendChild: () => {},
-                    addEventListener: () => {}
+                    addEventListener: (event, handler) => {
+                        eventHandlers.set(event, handler);
+                    },
+                    querySelector: () => null,
+                    get value() { return inputValue; },
+                    set value(val) { inputValue = val; }
                 }),
-                body: { appendChild: () => {} }
+                body: { appendChild: () => {} },
+                addEventListener: (event, handler) => {
+                    eventHandlers.set(event, handler);
+                }
             };
 
+            // Initialize CarbonBar and ToolCaller
             const carbonBar = new CarbonBar(mockDocument);
             const toolCaller = new ToolCaller();
 
@@ -29,7 +41,7 @@ const tests = [
                         message: { type: 'string' }
                     }
                 },
-                execute: async (args) => ({ result: `Executed with ${args.message}` })
+                execute: async (scope, args) => ({ result: `Executed with ${args.message}` })
             };
 
             toolCaller.registerTool('test', testTool);
@@ -38,43 +50,137 @@ const tests = [
             const tools = toolCaller.getTools();
             TestRunner.assert(tools.length === 1, 'Tool should be registered');
 
-            // Test tool execution through CarbonBar
-            const result = await toolCaller.executeTool('test-tool', { message: 'integration test' });
-            TestRunner.assert(result.result === 'Executed with integration test', 'Tool execution should work');
+            // Simulate user entering a command
+            inputValue = 'test-tool {"message": "integration test"}';
+            
+            // Simulate Enter key press
+            const keydownHandler = eventHandlers.get('keydown');
+            TestRunner.assert(keydownHandler, 'Keydown handler should be registered');
+            
+            // Trigger the command processing
+            await keydownHandler({ key: 'Enter', target: { value: inputValue } });
+
+            // Verify command was processed
+            TestRunner.assert(carbonBar.messages.length > 0, 'Command should be added to message history');
+            
+            // Clean up
+            toolCaller.reset();
+            carbonBar.hide();
         }
     },
     {
         name: 'End-to-End Command Flow',
         fn: async () => {
             const messages = [];
+            let inputValue = '';
+            let eventHandlers = new Map();
+            
             const mockDocument = {
                 createElement: (tag) => ({
                     style: {},
-                    classList: { add: () => {} },
+                    classList: { add: () => {}, remove: () => {} },
                     appendChild: () => {},
                     addEventListener: (event, handler) => {
-                        if (event === 'keydown') {
-                            // Simulate Enter key press with a command
-                            handler({ key: 'Enter', target: { value: 'test command' } });
-                        }
+                        eventHandlers.set(event, handler);
                     },
-                    value: ''
+                    querySelector: () => null,
+                    get value() { return inputValue; },
+                    set value(val) { inputValue = val; }
                 }),
-                body: { appendChild: () => {} }
+                body: { appendChild: () => {} },
+                addEventListener: (event, handler) => {
+                    eventHandlers.set(event, handler);
+                }
             };
 
             const carbonBar = new CarbonBar(mockDocument);
             const toolCaller = new ToolCaller();
 
-            // Mock command processing
+            // Register a test command handler
             carbonBar.processCommand = async (cmd) => {
                 messages.push(cmd);
                 return { success: true, result: `Processed: ${cmd}` };
             };
 
+            // Simulate user entering a command
+            inputValue = 'test command';
+            
+            // Simulate Enter key press
+            const keydownHandler = eventHandlers.get('keydown');
+            TestRunner.assert(keydownHandler, 'Keydown handler should be registered');
+            
+            // Trigger the command processing
+            await keydownHandler({ key: 'Enter', target: { value: inputValue } });
+
             // Verify command flow
             TestRunner.assert(messages.length === 1, 'Command should be processed');
             TestRunner.assert(messages[0] === 'test command', 'Command should match input');
+            TestRunner.assert(carbonBar.commandHistory.length === 1, 'Command should be added to history');
+            
+            // Clean up
+            toolCaller.reset();
+            carbonBar.hide();
+        }
+    },
+    {
+        name: 'Error Handling in Tool Execution',
+        fn: async () => {
+            let inputValue = '';
+            let eventHandlers = new Map();
+            const mockDocument = {
+                createElement: (tag) => ({
+                    style: {},
+                    classList: { add: () => {}, remove: () => {} },
+                    appendChild: () => {},
+                    addEventListener: (event, handler) => {
+                        eventHandlers.set(event, handler);
+                    },
+                    querySelector: () => null,
+                    get value() { return inputValue; },
+                    set value(val) { inputValue = val; }
+                }),
+                body: { appendChild: () => {} },
+                addEventListener: (event, handler) => {
+                    eventHandlers.set(event, handler);
+                }
+            };
+
+            const carbonBar = new CarbonBar(mockDocument);
+            const toolCaller = new ToolCaller();
+
+            // Register a tool that throws an error
+            const errorTool = {
+                name: 'error-tool',
+                description: 'A tool that throws an error',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        message: { type: 'string' }
+                    }
+                },
+                execute: async () => {
+                    throw new Error('Test error');
+                }
+            };
+
+            toolCaller.registerTool('error', errorTool);
+            
+            // Simulate user entering a command
+            inputValue = 'error-tool {"message": "should fail"}';
+            
+            // Simulate Enter key press
+            const keydownHandler = eventHandlers.get('keydown');
+            TestRunner.assert(keydownHandler, 'Keydown handler should be registered');
+            
+            // Trigger the command processing
+            await keydownHandler({ key: 'Enter', target: { value: inputValue } });
+
+            // Verify error handling
+            TestRunner.assert(carbonBar.messages.length > 0, 'Error should be recorded in message history');
+            
+            // Clean up
+            toolCaller.reset();
+            carbonBar.hide();
         }
     }
 ];

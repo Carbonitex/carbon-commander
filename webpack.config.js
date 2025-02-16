@@ -39,7 +39,8 @@ module.exports = {
     new CopyWebpackPlugin({
       patterns: [
         { from: 'manifest.json', to: 'manifest.json' },
-        { from: 'src/chrome-carbonbar-page/carbon-commander.css', to: 'carbon-commander.css' }
+        { from: 'src/chrome-carbonbar-page/carbon-commander.css', to: 'carbon-commander.css' },
+        { from: 'src/chrome-carbonbar-page/settings.css', to: 'settings.css' }
       ],
     }),
   ]

@@ -87,6 +87,40 @@ export async function runMCPTests() {
             }
         },
         {
+            name: 'MCP Function Timeout',
+            fn: async () => {
+                // Add a delayed tool to the mock service
+                mockService.addTool('test-toolset', {
+                    name: 'delayed-tool',
+                    description: 'A tool that takes longer than the timeout',
+                    parameters: {
+                        type: 'object',
+                        properties: {
+                            delay: { type: 'number' }
+                        }
+                    },
+                    execute: async (args) => {
+                        await new Promise(resolve => setTimeout(resolve, args.delay));
+                        return { result: 'Delayed execution complete' };
+                    }
+                });
+
+                try {
+                    // Attempt to call function with a delay longer than the timeout
+                    await mcpToolCaller.mcpCallFunction('test-service', 'delayed-tool', { delay: 5000 });
+                    TestRunner.assert(false, 'Function call should have timed out');
+                } catch (error) {
+                    TestRunner.assert(error.name === 'AbortError' || error.message.includes('timeout'), 
+                        'Expected timeout or abort error');
+                }
+
+                // Verify successful execution with delay shorter than timeout
+                const result = await mcpToolCaller.mcpCallFunction('test-service', 'delayed-tool', { delay: 100 });
+                TestRunner.assertEquals(result.result, 'Delayed execution complete', 
+                    'Function should complete when within timeout');
+            }
+        },
+        {
             name: 'MCP Health Check',
             fn: async () => {
                 let health = await mcpToolCaller.checkMCPHealth('test-service');

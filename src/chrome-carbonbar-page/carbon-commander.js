@@ -1064,7 +1064,7 @@ Available tools are being limited. For more advanced features, recommend connect
 
       if (value.toLowerCase().startsWith('mcp disconnect ')) {
         const serviceId = value.split(' ')[2];
-        await this.mcpToolCaller.disconnectMCPService(serviceId);
+        await this.mcpToolCaller.disconnectMCPService(serviceId, true);
         this.sendFakeAIResponse(`Disconnected from MCP service: ${serviceId}`);
         return;
       }
@@ -1716,9 +1716,9 @@ Available tools are being limited. For more advanced features, recommend connect
         clearInterval(this.mcpStatusInterval);
         this.mcpStatusInterval = null;
       }
-      // Disconnect all MCP services
+      // Disconnect all MCP services permanently during cleanup
       this.mcpToolCaller.getMCPServices().forEach(service => {
-        this.mcpToolCaller.disconnectMCPService(service.id);
+        this.mcpToolCaller.disconnectMCPService(service.id, true);
       });
     }
 

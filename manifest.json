@@ -32,7 +32,7 @@
     "content_scripts": [
       {
         "matches": ["<all_urls>"],
-        "css": ["carbon-commander.css"],
+        "css": ["carbon-commander.css", "settings.css"],
         "js": ["service.js"],
         "run_at": "document_end",
         "all_frames": true
@@ -43,7 +43,8 @@
         "resources": [
           "carbon-commander.js",
           "secure-messaging.js",
-          "service.js"
+          "service.js",
+          "settings.css"
         ],
         "matches": ["<all_urls>"]
       }

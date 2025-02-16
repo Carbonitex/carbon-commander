@@ -1,0 +1,262 @@
+.cc-settings-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000000;
+}
+
+/* Settings Icon */
+.cc-settings-icon {
+    cursor: pointer;
+    line-height: 10px;
+    position: relative;
+    font-size: 21px;
+    top: -2px;
+    margin-left: 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.cc-settings-icon:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Settings Dialog */
+.cc-settings-dialog {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 800px;
+    max-width: 90vw;
+    max-height: 90vh;
+    background-color: rebeccapurple;
+    border: 1px solid mediumorchid;
+    border-radius: 8px;
+    padding: 12px;
+    z-index: 1000001;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    overflow-y: auto;
+}
+
+.cc-settings-dialog h2 {
+    margin: 0 0 8px 0;
+    color: white;
+    font-size: 18px;
+    font-weight: 500;
+}
+
+/* Settings Sections */
+.cc-settings-section {
+    margin-bottom: 12px;
+    padding: 8px;
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 6px;
+}
+
+.cc-settings-section h3 {
+    color: #79c1ff;
+    font-size: 15px;
+    margin: 0 0 6px 0;
+}
+
+.cc-settings-field {
+    margin-bottom: 8px;
+}
+
+.cc-settings-field label {
+    display: block;
+    color: white;
+    margin-bottom: 4px;
+    font-size: 13px;
+}
+
+.cc-settings-field textarea,
+.cc-settings-field input[type="text"] {
+    width: 100%;
+    padding: 6px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: white;
+    font-family: inherit;
+    font-size: 13px;
+    resize: vertical;
+    min-height: 60px;
+}
+
+.cc-settings-field input[type="text"] {
+    min-height: unset;
+}
+
+.cc-settings-field textarea:focus,
+.cc-settings-field input[type="text"]:focus {
+    border-color: #79c1ff;
+    outline: none;
+}
+
+/* Key-Value Table */
+.cc-key-value-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 4px;
+    font-size: 13px;
+}
+
+.cc-key-value-table th,
+.cc-key-value-table td {
+    padding: 4px 6px;
+    text-align: left;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.cc-key-value-table th {
+    background-color: rgba(0, 0, 0, 0.2);
+    color: #79c1ff;
+    font-weight: 500;
+}
+
+.cc-key-value-table td input {
+    width: 100%;
+    padding: 4px;
+    font-size: 13px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: white;
+}
+
+.cc-key-value-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+/* Settings Buttons */
+.cc-settings-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Dialog */
+.cc-settings-dialog .cc-dialog {
+    padding: 8px;
+}
+
+/* Keybind Input */
+.cc-keybind-input {
+    padding: 6px;
+    margin: 4px 0;
+}
+
+.cc-keybind-input:focus {
+    border-color: #79c1ff;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(121, 193, 255, 0.2);
+}
+
+.cc-keybind-display {
+    padding: 4px 6px;
+    margin-bottom: 4px;
+}
+
+.cc-dialog-buttons {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+    flex-direction: row;
+}
+
+/* MCP Service styles */
+.mcp-services-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 4px;
+    font-size: 13px;
+}
+
+.mcp-services-table th,
+.mcp-services-table td {
+    padding: 4px 6px;
+    text-align: left;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.mcp-services-table input {
+    width: 100%;
+    padding: 4px;
+    font-size: 13px;
+}
+
+.mcp-services-table input[readonly] {
+    background-color: rgba(0, 0, 0, 0.3);
+    cursor: not-allowed;
+}
+
+.mcp-status {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.mcp-status.connected {
+    background-color: rgba(46, 204, 113, 0.2);
+    color: #2ecc71;
+}
+
+.mcp-status.disconnected {
+    background-color: rgba(231, 76, 60, 0.2);
+    color: #e74c3c;
+}
+
+.mcp-status.configured {
+    background-color: rgba(241, 196, 15, 0.2);
+    color: #f1c40f;
+}
+
+.mcp-status.error {
+    background-color: rgba(231, 76, 60, 0.2);
+    color: #e74c3c;
+}
+
+.update-mcp-key,
+.toggle-mcp-service,
+.delete-mcp-service {
+    font-size: 12px;
+    padding: 3px 6px;
+    margin: 0 1px;
+}
+
+/* Encrypted Values */
+.encrypted-value {
+    padding: 3px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+    font-family: monospace;
+}
+
+/* Buttons */
+.cc-button {
+    padding: 4px 8px;
+    font-size: 13px;
+    border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background-color: rgba(0, 0, 0, 0.2);
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.cc-button:hover {
+    background-color: rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.3);
+} 
