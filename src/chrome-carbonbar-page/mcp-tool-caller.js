@@ -1,4 +1,5 @@
 import { ccLogger } from '../global.js';
+import settings from './settings.js';
 
 class MCPToolCaller {
     constructor() {
@@ -6,6 +7,22 @@ class MCPToolCaller {
         this.mcpClients = new Map(); // Map of MCP client connections
         this.mcpConfig = new Map(); // Map of MCP service configurations
         this.mcpToolsets = new Map(); // Map of MCP-provided toolsets
+        this.reconnectInterval = null;
+        this.startReconnectInterval();
+    }
+
+    startReconnectInterval() {
+        // Check connections every 30 seconds
+        this.reconnectInterval = setInterval(() => {
+            this.refreshMCPConnections();
+        }, 30000);
+    }
+
+    stopReconnectInterval() {
+        if (this.reconnectInterval) {
+            clearInterval(this.reconnectInterval);
+            this.reconnectInterval = null;
+        }
     }
 
     // MCP-specific methods
@@ -15,13 +32,23 @@ class MCPToolCaller {
         ccLogger.debug(`Configuring MCP service: ${serviceId}`);
         
         try {
-            this.mcpConfig.set(serviceId, {
+            const config = {
                 endpoint,
                 apiKey,
                 options,
                 status: 'configured',
                 toolsets: [] // Will store toolsets provided by this service
+            };
+
+            this.mcpConfig.set(serviceId, config);
+            
+            // Save configuration to settings
+            settings.mcpConfigurations.set(serviceId, {
+                endpoint,
+                apiKey,
+                options
             });
+            await settings.save();
             
             // Initialize client connection if autoConnect is true
             if (options.autoConnect) {
@@ -35,7 +62,21 @@ class MCPToolCaller {
         }
     }
 
-    async connectMCPService(serviceId) {
+    async loadSavedConfigurations() {
+        ccLogger.debug('Loading saved MCP configurations');
+        for (const [serviceId, config] of settings.mcpConfigurations.entries()) {
+            try {
+                await this.configureMCPService({
+                    serviceId,
+                    ...config
+                });
+            } catch (error) {
+                ccLogger.error(`Error loading saved MCP configuration for ${serviceId}:`, error);
+            }
+        }
+    }
+
+    async connectMCPService(serviceId, retryCount = 3, retryDelay = 1000) {
         ccLogger.debug(`Connecting to MCP service: ${serviceId}`);
         
         const config = this.mcpConfig.get(serviceId);
@@ -43,37 +84,49 @@ class MCPToolCaller {
             throw new Error(`MCP service ${serviceId} not configured`);
         }
 
-        try {
-            // Initialize MCP client connection with enhanced capabilities
-            const client = {
-                serviceId,
-                endpoint: config.endpoint,
-                connected: true,
-                // Enhanced client methods
-                callFunction: async (functionName, args) => {
-                    return await this.mcpCallFunction(serviceId, functionName, args);
-                },
-                discoverTools: async () => {
-                    return await this.discoverMCPTools(serviceId);
-                },
-                getSystemPrompt: async (basePrompt, scope) => {
-                    return await this.getMCPSystemPrompt(serviceId, basePrompt, scope);
+        let lastError = null;
+        for (let attempt = 1; attempt <= retryCount; attempt++) {
+            try {
+                // Initialize MCP client connection with enhanced capabilities
+                const client = {
+                    serviceId,
+                    endpoint: config.endpoint,
+                    connected: true,
+                    // Enhanced client methods
+                    callFunction: async (functionName, args) => {
+                        return await this.mcpCallFunction(serviceId, functionName, args);
+                    },
+                    discoverTools: async () => {
+                        return await this.discoverMCPTools(serviceId);
+                    },
+                    getSystemPrompt: async (basePrompt, scope) => {
+                        return await this.getMCPSystemPrompt(serviceId, basePrompt, scope);
+                    }
+                };
+
+                this.mcpClients.set(serviceId, client);
+                config.status = 'connected';
+
+                // Discover available tools after connection
+                await this.discoverMCPTools(serviceId);
+                
+                return true;
+            } catch (error) {
+                lastError = error;
+                ccLogger.warn(`Connection attempt ${attempt} failed for MCP service ${serviceId}:`, error);
+                
+                if (attempt < retryCount) {
+                    ccLogger.debug(`Retrying in ${retryDelay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, retryDelay));
                 }
-            };
-
-            this.mcpClients.set(serviceId, client);
-            config.status = 'connected';
-
-            // Discover available tools after connection
-            await this.discoverMCPTools(serviceId);
-            
-            return true;
-        } catch (error) {
-            ccLogger.error(`Error connecting to MCP service ${serviceId}:`, error);
-            config.status = 'error';
-            config.lastError = error.message;
-            return false;
+            }
         }
+
+        // If all retries failed, update status and throw error
+        ccLogger.error(`Failed to connect to MCP service ${serviceId} after ${retryCount} attempts:`, lastError);
+        config.status = 'error';
+        config.lastError = lastError.message;
+        return false;
     }
 
     async discoverMCPTools(serviceId) {
@@ -195,6 +248,11 @@ class MCPToolCaller {
                 if (config) {
                     config.status = 'disconnected';
                 }
+
+                // Remove from settings if permanent
+                settings.mcpConfigurations.delete(serviceId);
+                await settings.save();
+
                 return true;
             } catch (error) {
                 ccLogger.error(`Error disconnecting from MCP service ${serviceId}:`, error);
@@ -204,13 +262,16 @@ class MCPToolCaller {
         return false;
     }
 
-    async mcpCallFunction(serviceId, functionName, args) {
+    async mcpCallFunction(serviceId, functionName, args, timeout = 30000) {
         const client = this.mcpClients.get(serviceId);
         if (!client) {
             throw new Error(`MCP client ${serviceId} not connected`);
         }
 
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
+
             const response = await fetch(`${client.endpoint}/execute`, {
                 method: 'POST',
                 headers: {
@@ -220,8 +281,11 @@ class MCPToolCaller {
                 body: JSON.stringify({
                     function: functionName,
                     arguments: args
-                })
+                }),
+                signal: controller.signal
             });
+
+            clearTimeout(timeoutId);
 
             if (!response.ok) {
                 throw new Error(`MCP call failed: ${response.statusText}`);
@@ -229,6 +293,10 @@ class MCPToolCaller {
 
             return await response.json();
         } catch (error) {
+            if (error.name === 'AbortError') {
+                ccLogger.error(`MCP function call timed out after ${timeout}ms:`, { serviceId, functionName });
+                throw new Error(`MCP function call timed out: ${functionName}`);
+            }
             ccLogger.error(`Error calling MCP function ${functionName}:`, error);
             throw error;
         }
@@ -410,10 +478,47 @@ class MCPToolCaller {
         } : null;
     }
 
+    async checkMCPHealth(serviceId) {
+        const client = this.mcpClients.get(serviceId);
+        if (!client) {
+            return false;
+        }
+
+        try {
+            const response = await fetch(`${client.endpoint}/status`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${this.mcpConfig.get(serviceId).apiKey}`
+                },
+                timeout: 5000
+            });
+
+            if (!response.ok) {
+                throw new Error(`Health check failed: ${response.statusText}`);
+            }
+
+            const status = await response.json();
+            return status.healthy === true;
+        } catch (error) {
+            ccLogger.error(`Health check failed for MCP service ${serviceId}:`, error);
+            return false;
+        }
+    }
+
     async refreshMCPConnections() {
         ccLogger.debug('Refreshing all MCP connections');
         const results = [];
         for (const [serviceId, config] of this.mcpConfig.entries()) {
+            // First check health of existing connection
+            if (this.mcpClients.has(serviceId)) {
+                const isHealthy = await this.checkMCPHealth(serviceId);
+                if (!isHealthy) {
+                    ccLogger.warn(`Unhealthy MCP service detected: ${serviceId}, attempting reconnect`);
+                    await this.disconnectMCPService(serviceId);
+                }
+            }
+
+            // Reconnect if needed
             if (config.status === 'connected' || config.options.autoReconnect) {
                 results.push({
                     serviceId,
@@ -422,6 +527,14 @@ class MCPToolCaller {
             }
         }
         return results;
+    }
+
+    cleanup() {
+        this.stopReconnectInterval();
+        // Disconnect all services
+        for (const [serviceId] of this.mcpClients) {
+            this.disconnectMCPService(serviceId);
+        }
     }
 }
 

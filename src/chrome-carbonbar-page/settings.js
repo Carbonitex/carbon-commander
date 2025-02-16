@@ -14,11 +14,8 @@ export class Settings {
         this.keyValuePairs = new Map();
         this.encryptedKeys = new Map(); // Track which keys are encrypted and if they have a non-empty value
         this.keybind = ccDefaultKeybind; // Default keybind
+        this.mcpConfigurations = new Map(); // Store MCP service configurations
         
-
-
-
-
         // Add event listener for settings loaded
         window.addEventListener('message', this.handleSettingsMessage.bind(this));
     }
@@ -37,6 +34,7 @@ export class Settings {
                 this.systemPrompt = settings.systemPrompt || '';
                 this.keyValuePairs = settings.keyValuePairs || new Map();
                 this.hostnamePrompts = settings.hostnamePrompts || new Map();
+                this.mcpConfigurations = settings.mcpConfigurations || new Map();
 
                 if (settings.encryptedKeys) {
                     this.encryptedKeys = new Map();
@@ -105,7 +103,8 @@ export class Settings {
                 systemPrompt: this.systemPrompt,
                 keyValuePairs: this.keyValuePairs,
                 encryptedKeys: this.encryptedKeys,
-                hostnamePrompts: this.hostnamePrompts
+                hostnamePrompts: this.hostnamePrompts,
+                mcpConfigurations: this.mcpConfigurations
             };
             
             // Save encrypted values first
@@ -143,11 +142,27 @@ export class Settings {
                 }
             }
 
+            // Save MCP configurations with encrypted API keys
+            for (const [serviceId, config] of this.mcpConfigurations.entries()) {
+                if (config.apiKey) {
+                    await this._postMessageHandler({
+                        type: 'SAVE_ENCRYPTED_VALUE',
+                        payload: {
+                            key: `mcp-key-${serviceId}`,
+                            value: config.apiKey
+                        }
+                    });
+                    // Remove API key from the configuration before saving
+                    const configCopy = { ...config };
+                    delete configCopy.apiKey;
+                    this.mcpConfigurations.set(serviceId, configCopy);
+                }
+            }
+
             //remove all encrypted keys from the keyValuePairs map
             for(const [key, value] of this.encryptedKeys.entries()) {
                 this.keyValuePairs.delete(key);
             }
-
             
             // Send settings to service.js for storage
             this._postMessageHandler({

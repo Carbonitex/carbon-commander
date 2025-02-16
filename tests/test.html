@@ -5,7 +5,7 @@
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 20px;
             background: #f5f5f5;
@@ -20,24 +20,63 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
+        .test-regions {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .test-categories {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .category-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .test-category {
+            margin-bottom: 15px;
+        }
+
+        .test-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
         .controls {
             margin-bottom: 20px;
             text-align: center;
         }
 
         button {
-            padding: 10px 20px;
-            font-size: 16px;
+            padding: 8px 16px;
+            font-size: 14px;
             border: none;
             border-radius: 4px;
             background: #007bff;
             color: white;
             cursor: pointer;
-            margin: 0 10px;
+            transition: background 0.2s;
+        }
+
+        button.category-button {
+            background: #6c757d;
+            text-align: left;
         }
 
         button:hover {
             background: #0056b3;
+        }
+
+        button.category-button:hover {
+            background: #5a6268;
         }
 
         button:disabled {
@@ -45,15 +84,27 @@
             cursor: not-allowed;
         }
 
-        #results {
+        .test-output {
+            display: grid;
+            grid-template-rows: 1fr 200px;
+            gap: 20px;
+        }
+
+        #results, #analysis {
             background: #fff;
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow-y: auto;
+        }
+
+        #results {
             white-space: pre-wrap;
             font-family: monospace;
-            max-height: 600px;
-            overflow-y: auto;
+        }
+
+        #analysis {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
 
         .success { color: #28a745; }
@@ -70,21 +121,118 @@
 
         .test-group.success { border-color: #28a745; }
         .test-group.error { border-color: #dc3545; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .stat-box {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #6c757d;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+
+        .progress-bar {
+            height: 4px;
+            background: #e9ecef;
+            margin-top: 10px;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #28a745;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>Carbon Commander Tool Tests</h1>
-        <p>Run and view test results for all tool implementations</p>
+        <p>Comprehensive test suite for all Carbon Commander components and tools</p>
     </div>
 
-    <div class="controls">
-        <button id="runAll">Run All Tests</button>
-        <button id="clearResults">Clear Results</button>
-    </div>
+    <div class="test-regions">
+        <div class="test-categories">
+            <div class="test-category">
+                <div class="category-title">Global Controls</div>
+                <div class="test-buttons">
+                    <button id="runAll">Run All Tests</button>
+                    <button id="clearResults">Clear Results</button>
+                </div>
+            </div>
 
-    <div id="results">
-        Click "Run All Tests" to start testing...
+            <div class="test-category">
+                <div class="category-title">External Tools</div>
+                <div class="test-buttons">
+                    <button class="category-button" data-suite="HackerNews">HackerNews Tools</button>
+                    <button class="category-button" data-suite="Jira">Jira Tools</button>
+                    <button class="category-button" data-suite="MCP">MCP Tools</button>
+                </div>
+            </div>
+
+            <div class="test-category">
+                <div class="category-title">Core Components</div>
+                <div class="test-buttons">
+                    <button class="category-button" data-suite="CarbonBar">CarbonBar</button>
+                    <button class="category-button" data-suite="ServiceWorker">Service Worker</button>
+                    <button class="category-button" data-suite="ToolCaller">Tool Caller</button>
+                </div>
+            </div>
+
+            <div class="test-category">
+                <div class="category-title">Integration Tests</div>
+                <div class="test-buttons">
+                    <button class="category-button" data-suite="Integration">Full Integration</button>
+                    <button class="category-button" data-suite="API">API Integration</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-output">
+            <div id="results">Click "Run All Tests" or select a specific test category to begin...</div>
+            <div id="analysis">
+                <h3>Test Analysis</h3>
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-label">Total Tests</div>
+                        <div class="stat-value" id="totalTests">0</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Passed</div>
+                        <div class="stat-value success" id="passedTests">0</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Failed</div>
+                        <div class="stat-value error" id="failedTests">0</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Skipped</div>
+                        <div class="stat-value warning" id="skippedTests">0</div>
+                    </div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script type="module">
@@ -93,9 +241,28 @@
 
         // Override ccLogger to also write to results div
         const resultsDiv = document.getElementById('results');
+        const analysisDiv = document.getElementById('analysis');
         
-        // Keep track of timers
+        // Keep track of timers and test statistics
         const timers = new Map();
+        let currentStats = {
+            total: 0,
+            passed: 0,
+            failed: 0,
+            skipped: 0
+        };
+        
+        function updateAnalysis() {
+            document.getElementById('totalTests').textContent = currentStats.total;
+            document.getElementById('passedTests').textContent = currentStats.passed;
+            document.getElementById('failedTests').textContent = currentStats.failed;
+            document.getElementById('skippedTests').textContent = currentStats.skipped;
+
+            const progressPercent = currentStats.total > 0 
+                ? (currentStats.passed / currentStats.total) * 100 
+                : 0;
+            document.querySelector('.progress-fill').style.width = `${progressPercent}%`;
+        }
         
         function appendToResults(level, ...args) {
             const text = args.join(' ');
@@ -103,11 +270,7 @@
             div.className = `test-group ${level}`;
             div.textContent = text;
             resultsDiv.appendChild(div);
-            
-            // Auto-scroll to bottom
             resultsDiv.scrollTop = resultsDiv.scrollHeight;
-            
-            // Call original console method
             console[level](...args);
         }
 
@@ -131,8 +294,6 @@
                 timers.delete(label);
                 console.timeEnd(label);
                 appendToResults('time', `${label}: ${duration.toFixed(2)}ms`);
-            } else {
-                appendToResults('warning', `Timer not found: ${label}`);
             }
         };
 
@@ -140,10 +301,18 @@
         document.getElementById('runAll').addEventListener('click', async () => {
             const button = document.getElementById('runAll');
             button.disabled = true;
-            resultsDiv.textContent = 'Running tests...\n\n';
+            resultsDiv.textContent = 'Running all tests...\n\n';
+            currentStats = { total: 0, passed: 0, failed: 0, skipped: 0 };
             
             try {
-                await TestSuiteRunner.runAllTests();
+                const results = await TestSuiteRunner.runAllTests();
+                currentStats = {
+                    total: results.total,
+                    passed: results.passed,
+                    failed: results.failed,
+                    skipped: results.skipped
+                };
+                updateAnalysis();
             } catch (error) {
                 appendToResults('error', 'Error running tests:', error);
             }
@@ -152,8 +321,35 @@
         });
 
         document.getElementById('clearResults').addEventListener('click', () => {
-            resultsDiv.textContent = 'Click "Run All Tests" to start testing...';
+            resultsDiv.textContent = 'Click "Run All Tests" or select a specific test category to begin...';
+            currentStats = { total: 0, passed: 0, failed: 0, skipped: 0 };
+            updateAnalysis();
             timers.clear();
+        });
+
+        // Add handlers for category buttons
+        document.querySelectorAll('.category-button').forEach(button => {
+            button.addEventListener('click', async () => {
+                const suite = button.dataset.suite;
+                button.disabled = true;
+                resultsDiv.textContent = `Running ${suite} tests...\n\n`;
+                currentStats = { total: 0, passed: 0, failed: 0, skipped: 0 };
+                
+                try {
+                    const results = await TestSuiteRunner.runSuite(suite);
+                    currentStats = {
+                        total: results.total,
+                        passed: results.passed,
+                        failed: results.failed,
+                        skipped: results.skipped
+                    };
+                    updateAnalysis();
+                } catch (error) {
+                    appendToResults('error', `Error running ${suite} tests:`, error);
+                }
+                
+                button.disabled = false;
+            });
         });
     </script>
 </body>

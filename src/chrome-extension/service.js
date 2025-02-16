@@ -163,6 +163,7 @@ async function getCarbonBarSettings() {
       encryptedKeys: new Map(),
       systemPrompt: '',
       hostnamePrompts: new Map(),
+      mcpConfigurations: new Map(),
       keybind: ccDefaultKeybind
     };
   }
@@ -185,6 +186,25 @@ async function getCarbonBarSettings() {
     );
   } else {
     settings.hostnamePrompts = new Map();
+  }
+
+  // Convert mcpConfigurations to Map if it exists
+  if (settings.mcpConfigurations) {
+    settings.mcpConfigurations = new Map(
+        settings.mcpConfigurations instanceof Map ?
+            settings.mcpConfigurations :
+            Object.entries(settings.mcpConfigurations)
+    );
+  } else {
+    settings.mcpConfigurations = new Map();
+  }
+
+  // Load MCP API keys from encrypted storage
+  for (const [serviceId, config] of settings.mcpConfigurations.entries()) {
+    const apiKey = await CCLocalStorage.getEncrypted(`mcp-key-${serviceId}`);
+    if (apiKey) {
+      config.apiKey = apiKey;
+    }
   }
 
   //enhance settings with encrypted keys
