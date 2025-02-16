@@ -1837,7 +1837,13 @@ Available tools are being limited. For more advanced features, recommend connect
       
       // Add custom system prompt from settings if available
       if (this.settings.systemPrompt) {
-          systemPrompt += '\n\nCustom Configuration Instructions:\n' + this.settings.systemPrompt;
+          systemPrompt += '\n\Custom User Instructions:\n' + this.settings.systemPrompt;
+      }
+
+      // Add hostname-specific prompt if available
+      const currentHostname = window.location.hostname;
+      if (this.settings.hostnamePrompts && this.settings.hostnamePrompts.has(currentHostname)) {
+          systemPrompt += `\n\nHost-Specific Instructions: ${currentHostname} - ${this.settings.hostnamePrompts.get(currentHostname)}`;
       }
 
       // Get system prompts from both local and MCP tools

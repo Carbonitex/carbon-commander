@@ -10,6 +10,7 @@ export class Settings {
         ccLogger.debug('Settings constructor');
         this._postMessageHandler = null;
         this.systemPrompt = '';
+        this.hostnamePrompts = new Map(); // Add storage for hostname-specific prompts
         this.keyValuePairs = new Map();
         this.encryptedKeys = new Map(); // Track which keys are encrypted and if they have a non-empty value
         this.keybind = ccDefaultKeybind; // Default keybind
@@ -35,6 +36,7 @@ export class Settings {
             if (settings) {
                 this.systemPrompt = settings.systemPrompt || '';
                 this.keyValuePairs = settings.keyValuePairs || new Map();
+                this.hostnamePrompts = settings.hostnamePrompts || new Map();
 
                 if (settings.encryptedKeys) {
                     this.encryptedKeys = new Map();
@@ -83,8 +85,8 @@ export class Settings {
             const listener = (event) => {
                 if (event.data.type === 'SET_OPENAI_KEY_RESPONSE') {
                     window.removeEventListener('message', listener);
-                resolve(event.data.payload);
-            }
+                    resolve(event.data.payload);
+                }
             };
             window.addEventListener('message', listener);
         });
@@ -102,7 +104,8 @@ export class Settings {
             const settingsToSave = {
                 systemPrompt: this.systemPrompt,
                 keyValuePairs: this.keyValuePairs,
-                encryptedKeys: this.encryptedKeys
+                encryptedKeys: this.encryptedKeys,
+                hostnamePrompts: this.hostnamePrompts
             };
             
             // Save encrypted values first
@@ -305,8 +308,37 @@ export class Settings {
             <div class="cc-settings-section">
                 <h3>System Prompt</h3>
                 <div class="cc-settings-field">
-                    <label>Custom system prompt to be injected into all system messages:</label>
+                    <label>Global system prompt (applies to all hosts):</label>
                     <textarea id="system-prompt">${this.systemPrompt || ''}</textarea>
+                </div>
+            </div>
+
+            <div class="cc-settings-section hostname-prompts-section">
+                <h3>Host-Specific System Prompts</h3>
+                <div class="cc-settings-field">
+                    <table class="cc-key-value-table hostname-prompts-table">
+                        <thead>
+                            <tr>
+                                <th>Hostname</th>
+                                <th>System Prompt</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${Array.from(this.hostnamePrompts || []).map(([hostname, prompt]) => `
+                                <tr>
+                                    <td><input type="text" value="${hostname}" class="hostname-key"></td>
+                                    <td><textarea class="hostname-prompt">${prompt}</textarea></td>
+                                    <td>
+                                        <button class="cc-button delete-hostname-prompt">Delete</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                    <div class="cc-key-value-actions">
+                        <button class="cc-button" id="add-hostname-prompt">Add Host-Specific Prompt</button>
+                    </div>
                 </div>
             </div>
             
@@ -319,10 +351,10 @@ export class Settings {
                 </div>
             </div>
             
-            <div class="cc-settings-section">
+            <div class="cc-settings-section key-value-pairs-section">
                 <h3>Configuration Key-Value Pairs</h3>
                 <div class="cc-settings-field">
-                    <table class="cc-key-value-table">
+                    <table class="cc-key-value-table key-value-pairs-table">
                         <thead>
                             <tr>
                                 <th>Key</th>
@@ -389,7 +421,7 @@ export class Settings {
         
         const addKVPairBtn = dialog.querySelector('#add-kv-pair');
         addKVPairBtn.addEventListener('click', () => {
-            const tbody = dialog.querySelector('.cc-key-value-table tbody');
+            const tbody = dialog.querySelector('.key-value-pairs-table tbody');
             const newRow = document.createElement('tr');
             newRow.innerHTML = `
                 <td><input type="text" class="kv-key"></td>
@@ -402,7 +434,48 @@ export class Settings {
             tbody.appendChild(newRow);
         });
         
+        // Add hostname prompt handlers
+        const addHostnamePromptBtn = dialog.querySelector('#add-hostname-prompt');
+        addHostnamePromptBtn.addEventListener('click', () => {
+            const tbody = dialog.querySelector('.hostname-prompts-table tbody');
+            
+            // Get current hostname and check if it's already configured
+            const currentHostname = window.location.hostname;
+            if (currentHostname && !this.hostnamePrompts.has(currentHostname)) {
+                const newRow = document.createElement('tr');
+                newRow.innerHTML = `
+                    <td><input type="text" class="hostname-key" value="${currentHostname}"></td>
+                    <td><textarea class="hostname-prompt" placeholder="Enter host-specific system prompt..."></textarea></td>
+                    <td>
+                        <button class="cc-button delete-hostname-prompt">Delete</button>
+                    </td>
+                `;
+                tbody.appendChild(newRow);
+                // Focus the prompt textarea
+                newRow.querySelector('.hostname-prompt').focus();
+            } else {
+                const newRow = document.createElement('tr');
+                newRow.innerHTML = `
+                    <td><input type="text" class="hostname-key" placeholder="example.com"></td>
+                    <td><textarea class="hostname-prompt" placeholder="Enter host-specific system prompt..."></textarea></td>
+                    <td>
+                        <button class="cc-button delete-hostname-prompt">Delete</button>
+                    </td>
+                `;
+                tbody.appendChild(newRow);
+                // Focus the hostname input since we don't have a pre-filled value
+                newRow.querySelector('.hostname-key').focus();
+            }
+        });
+        
         dialog.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('delete-hostname-prompt')) {
+                const row = e.target.closest('tr');
+                const hostname = row.querySelector('.hostname-key').value;
+                this.hostnamePrompts.delete(hostname);
+                row.remove();
+            }
+            
             if (e.target.classList.contains('delete-row')) {
                 const row = e.target.closest('tr');
                 const key = row.querySelector('.kv-key').value;
@@ -481,14 +554,30 @@ export class Settings {
             {
                 // Save system prompt
                 this.systemPrompt = dialog.querySelector('#system-prompt').value.trim();
+                
+                // Save hostname prompts using the specific hostname-prompts-table class
+                const newHostnamePrompts = new Map();
+                const hostnameRows = dialog.querySelector('.hostname-prompts-table tbody').querySelectorAll('tr');
+                for (const row of hostnameRows) {
+                    const hostnameKey = row.querySelector('.hostname-key');
+                    const hostnamePrompt = row.querySelector('.hostname-prompt');
+                    if (hostnameKey && hostnamePrompt) {
+                        const hostname = hostnameKey.value.trim();
+                        const prompt = hostnamePrompt.value.trim();
+                        if (hostname && prompt) {
+                            newHostnamePrompts.set(hostname, prompt);
+                        }
+                    }
+                }
+                this.hostnamePrompts = newHostnamePrompts;
                             
-                // Save key-value pairs
+                // Save key-value pairs using the specific key-value-pairs-table class
                 const newPairs = new Map();
                 const newEncryptedKeys = this.encryptedKeys;
 
-                const rows = dialog.querySelectorAll('.cc-key-value-table tbody tr');
-                for (const row of rows) {
-                    const key = row.querySelector('.kv-key').value.trim();
+                const kvRows = dialog.querySelector('.key-value-pairs-table tbody').querySelectorAll('tr');
+                for (const row of kvRows) {
+                    const key = row.querySelector('.kv-key')?.value.trim();
                     const valueInput = row.querySelector('.kv-value');
                     const encryptToggle = row.querySelector('.encrypt-toggle');
                     

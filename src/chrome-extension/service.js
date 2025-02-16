@@ -162,19 +162,32 @@ async function getCarbonBarSettings() {
       keyValuePairs: new Map(),
       encryptedKeys: new Map(),
       systemPrompt: '',
+      hostnamePrompts: new Map(),
       keybind: ccDefaultKeybind
     };
   }
 
+  // Convert keyValuePairs to Map if it exists
   if (settings.keyValuePairs) {
     settings.keyValuePairs = new Map(
         settings.keyValuePairs instanceof Map ? 
             settings.keyValuePairs : 
             Object.entries(settings.keyValuePairs)
     );
-  } 
+  }
 
-  //enhandce settings with encrypted keys
+  // Convert hostnamePrompts to Map if it exists
+  if (settings.hostnamePrompts) {
+    settings.hostnamePrompts = new Map(
+        settings.hostnamePrompts instanceof Map ?
+            settings.hostnamePrompts :
+            Object.entries(settings.hostnamePrompts)
+    );
+  } else {
+    settings.hostnamePrompts = new Map();
+  }
+
+  //enhance settings with encrypted keys
   const encryptedKeys = await CCLocalStorage.getEncryptedKeys();
   settings.encryptedKeys = new Map();
   for (const key of encryptedKeys) {
@@ -657,7 +670,6 @@ async function handleMessage(message, unprefixedType) {
     case 'SAVE_SETTINGS':
       ccLogger.debug('Saving settings');
       try {
-
         // Remove encrypted keys from keyValuePairs, if they exist
         if(message.payload.encryptedKeys) {
           for(const [key, value] of message.payload.encryptedKeys.entries()) {
@@ -665,10 +677,13 @@ async function handleMessage(message, unprefixedType) {
           }
         }
 
-        // Convert keyValuePairs map to object if it exists
+        // Convert Maps to objects for storage
         message.payload.encryptedKeys = undefined;
         if(message.payload.keyValuePairs && message.payload.keyValuePairs instanceof Map) {
           message.payload.keyValuePairs = Object.fromEntries(message.payload.keyValuePairs);
+        }
+        if(message.payload.hostnamePrompts && message.payload.hostnamePrompts instanceof Map) {
+          message.payload.hostnamePrompts = Object.fromEntries(message.payload.hostnamePrompts);
         }
 
         // Save settings
