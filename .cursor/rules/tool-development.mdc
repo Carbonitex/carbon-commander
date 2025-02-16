@@ -60,6 +60,7 @@ parameters: {
 
 - Always use async/await in the execute function
 - Properly handle the scope and args parameters
+- Throw an error to stop execution.
 - Return standardized response objects:
   ```javascript
   // Success case

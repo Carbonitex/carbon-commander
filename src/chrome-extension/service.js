@@ -5,7 +5,9 @@
  */
 
 import CCLocalStorage from '../chrome-serviceworker/local-storage.js';
-import { ccLogger } from '../global.js';
+import { ccLogger, ccDefaultKeybind } from '../global.js';
+
+ccLogger.setPrefix('[EXTENSION]');
 
 const inIframe = window.self !== window.top;
 
@@ -57,22 +59,11 @@ async function generateSecureHMACKey() {
 async function initializeStorage() {
   try {
     // Load all stored values
-    let settings, commandHistory, keybind;
-    try {
-      [settings, commandHistory, keybind] = await Promise.all([
-        CCLocalStorage.get('carbonbar_settings'),
-        CCLocalStorage.get('carbonbar_command_history'),
-        CCLocalStorage.get('carbonbar_keybind')
-      ]);
-    } catch (error) {
-      ccLogger.error('Error loading storage values:', error);
-      settings = {};
-      commandHistory = [];
-      keybind = { key: 'k', ctrl: true, meta: false };
+    let settings = await getCarbonBarSettings();
+    let keybind = await CCLocalStorage.get('carbonbar_keybind');
+    if(!keybind) {
+      keybind = ccDefaultKeybind;
     }
-
-    // Ensure settings is an object
-    settings = settings || {};
 
     // Generate secure token for this session
     const authToken = generateSecureToken();
@@ -80,56 +71,35 @@ async function initializeStorage() {
 
     // Send all initial values to the window
     try {
-      if (settings) {
-        window.postMessage({
-          type: 'SETTINGS_LOADED',
-          payload: {
-            ...settings,
-            _authToken: authToken // Include auth token in settings
-          }
-        }, window.location.origin);
-
-        // Check for OpenAI key in encrypted storage
-        try {
-          const openaiKey = await CCLocalStorage.getEncrypted('encrypted_openai-key');
-          if (openaiKey) {
-            // Send message to check and set OpenAI key
-            chrome.runtime.sendMessage(
-              { type: 'SET_OPENAI_KEY', payload: { key: openaiKey } },
-              (response) => {
-                if (response && response.success) {
-                  window.postMessage({
-                    type: 'PROVIDER_STATUS_UPDATE',
-                    provider: 'openai',
-                    status: true
-                  }, window.location.origin);
-                } else {
-                  // If key validation fails, clean up settings
-                  settings.encryptedKeys = settings.encryptedKeys?.filter(k => k !== 'openai-key') || [];
-                  delete settings.keyValuePairs?.['openai-key'];
-                  CCLocalStorage.set('carbonbar_settings', settings);
-                }
+      try {
+        const openaiKey = await CCLocalStorage.getEncrypted('openai-key');
+        if (openaiKey) {
+          // Send message to check and set OpenAI key
+          chrome.runtime.sendMessage(
+            { type: 'CARBON_SET_OPENAI_KEY', payload: { key: openaiKey } },
+            (response) => {
+              if (response && response.success) {
+                window.postMessage({
+                  type: 'PROVIDER_STATUS_UPDATE',
+                  provider: 'openai',
+                  status: true
+                }, window.location.origin);
+              } else {
+                // If key validation fails, clean up settings
+                settings.encryptedKeys = settings.encryptedKeys?.filter(k => k !== 'openai-key') || [];
+                CCLocalStorage.removeEncrypted('openai-key');
               }
-            );
-          }
-        } catch (error) {
-          ccLogger.error('Error checking OpenAI key:', error);
+            }
+          );
         }
+      } catch (error) {
+        ccLogger.error('Error checking OpenAI key:', error);
       }
 
-      if (commandHistory) {
-        window.postMessage({
-          type: 'COMMAND_HISTORY_LOADED',
-          payload: commandHistory
-        }, window.location.origin);
-      }
-
-      if (keybind) {
-        window.postMessage({
-          type: 'SET_KEYBIND',
-          payload: keybind
-        }, window.location.origin);
-      }
+      window.postMessage({
+        type: 'SET_KEYBIND',
+        payload: keybind
+      }, window.location.origin);
     } catch (error) {
       ccLogger.error('Error sending initial values to window:', error);
     }
@@ -143,7 +113,6 @@ function injectCarbonBar(file_path, tag) {
   chrome.runtime.sendMessage({ type: 'GET_TAB_ID' }, async function(response) {
     const currentTabId = response.tabId;
 
-    ccLogger.debug('Injecting carbonbar script:', file_path, currentTabId);
     var node = document.getElementsByTagName(tag)[0];
     
     // Inject the tabId script
@@ -166,13 +135,13 @@ function injectCarbonBar(file_path, tag) {
     secureMessagingScript.setAttribute('type', 'text/javascript');
     secureMessagingScript.setAttribute('src', chrome.runtime.getURL('secure-messaging.js'));
     ccLogger.debug('Injecting secure messaging script with key:', keyBase64);
-    secureMessagingScript.setAttribute('data-key', keyBase64);
+    secureMessagingScript.setAttribute('cc-data-key', keyBase64);
     node.appendChild(secureMessagingScript);
 
     // Initialize secure messaging after script loads
     secureMessagingScript.onload = () => {
       // Inject the main carbonbar script
-      ccLogger.debug('Injecting carbonbar script:', file_path);
+      ccLogger.debug('Injecting carbonbar script:', file_path, currentTabId);
       const script = document.createElement('script');
       script.setAttribute('type', 'text/javascript');
       script.setAttribute('src', file_path);
@@ -186,9 +155,42 @@ function injectCarbonBar(file_path, tag) {
   });
 }
 
+async function getCarbonBarSettings() {
+  let settings = await CCLocalStorage.get('carbonbar_settings');
+  if(!settings) {
+    settings = {
+      keyValuePairs: new Map(),
+      encryptedKeys: new Map(),
+      systemPrompt: '',
+      keybind: ccDefaultKeybind
+    };
+  }
+
+  if (settings.keyValuePairs) {
+    settings.keyValuePairs = new Map(
+        settings.keyValuePairs instanceof Map ? 
+            settings.keyValuePairs : 
+            Object.entries(settings.keyValuePairs)
+    );
+  } 
+
+  //enhandce settings with encrypted keys
+  const encryptedKeys = await CCLocalStorage.getEncryptedKeys();
+  settings.encryptedKeys = new Map();
+  for (const key of encryptedKeys) {
+    const encryptedValue = await CCLocalStorage.getEncrypted(key);
+    const hasValue = encryptedValue !== null && encryptedValue !== undefined && encryptedValue !== '';
+    settings.encryptedKeys.set(key, hasValue);
+    settings.keyValuePairs?.delete(key);
+  }
+
+  return settings;
+}
+
+
 // make sure this only gets injected once
 if (!window.carbonBarInjected && !inIframe) {
-  ccLogger.debug('Injecting carbonbar script:', chrome.runtime.getURL('carbon-commander.js'));
+  ccLogger.debug('Start injecting carbonbar script:', chrome.runtime.getURL('carbon-commander.js'));
   injectCarbonBar(chrome.runtime.getURL('carbon-commander.js'), 'body');
   window.carbonBarInjected = true;
 
@@ -256,65 +258,88 @@ if (!window.carbonBarInjected && !inIframe) {
 
   // Handle messages from chrome.runtime
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    ccLogger.debug('Received chrome.runtime message:', message);
-    
-    // Forward messages from background to window using standard postMessage
-    if (message.type === 'AI_RESPONSE_CHUNK' || message.type === 'AI_RESPONSE_ERROR') {
-      ccLogger.debug('Forwarding AI response message to window:', message);
-      // Forward directly without secure messaging since it's a one-way message
-      window.postMessage({
-        type: message.type, // Don't add CARBON_ prefix for these messages
-        payload: message.payload
-      }, window.location.origin);
-      sendResponse({ received: true });
+    sendResponse({ received: true });
+
+
+    if(!message.type.startsWith('CARBON_')) {
+      ccLogger.debug('Received non-CARBON message(2):', message);
       return;
     }
+
+    if(!message.fromServiceWorker) {
+      ccLogger.debug('Received message from non-service worker:', message);
+      return;
+    }
+
+    if(!message._authToken || message._authToken !== window.ccAuthToken) {
+      ccLogger.error('Received message from non-service worker with invalid auth token:', message);
+      return;
+    }
+
+    const unprefixedType = message.type.replace(/^CARBON_/, '');
+    
+
     
     // Handle AI_EXECUTE_TOOL messages
-    if (message.type === 'AI_EXECUTE_TOOL' && message.payload?.tool) {
-      const responseHandler = (event) => {
-        if (event.source === window && 
-            event.data.type === 'AI_TOOL_RESPONSE' && 
-            event.data.payload) {
-          ccLogger.debug('Received tool response:', event.data);
-          window.removeEventListener('message', responseHandler);
-          sendResponse(event.data.payload);
-        }
-      };
-      
-      window.addEventListener('message', responseHandler);
-      // Forward the tool execution request using secure messaging
-      window.postMessage({
-        type: 'CARBON_AI_EXECUTE_TOOL',
-        payload: {
-          tool: {
-            name: message.payload.tool.name,
-            arguments: message.payload.tool.arguments
-          }
-        }
-      }, window.location.origin);
-      return true; // Keep the message channel open
-    }
+    //if (unprefixedType === 'AI_EXECUTE_TOOL' && message.payload?.tool) {
+    //  const responseHandler = (event) => {
+    //    if (event.source === window && 
+    //        event.data.type === 'AI_TOOL_RESPONSE' && 
+    //        event.data.payload) {
+    //      ccLogger.debug('Received tool response:', event.data);
+    //      window.removeEventListener('message', responseHandler);
+    //      sendResponse(event.data.payload);
+    //    }
+    //  };
+    //  
+    //  window.addEventListener('message', responseHandler);
+    //  // Forward the tool execution request using secure messaging
+    //  window.postMessage({
+    //    type: 'CARBON_AI_EXECUTE_TOOL',
+    //    payload: {
+    //      tool: {
+    //        name: message.payload.tool.name,
+    //        arguments: message.payload.tool.arguments
+    //      }
+    //    }
+    //  }, window.location.origin);
+    //  return true; // Keep the message channel open
+    //}
+
+
+    // Forward messages from background to window using standard postMessage
+    ccLogger.debug('Forwarding message to window:', message, 'sender:', sender);
+    window.postMessage(message, window.location.origin);
     
-    // For other messages, send response immediately
-    sendResponse({ received: true });
+    return true;
   });
 
   // Listen for messages from the injected script
   window.addEventListener('message', async (event) => {
-    ccLogger.group('Service Message Handler');
-    ccLogger.debug('Received message:', {
-      type: event.data.type,
-      payload: event.data.payload,
-      source: event.source === window ? 'window' : 'external'
-    });
-
     // We only accept messages from ourselves
     if (event.source !== window) {
       ccLogger.warn('Rejected message from external source');
-      ccLogger.groupEnd();
       return;
     }
+
+    if(event.data.type && event.data.type.startsWith('CARBON_') && event.data._authToken !== window.ccAuthToken) {
+      ccLogger.error('Rejected unauthorized message', event.data.type);
+      return;
+    }
+
+    const hasAuthToken = event.data._authToken;
+    const authTokenMatched = hasAuthToken && event.data._authToken === window.ccAuthToken;
+    delete event.data._authToken;
+
+    ccLogger.group('Service Message Handler');
+    ccLogger.debug('Received message:', {
+      hasAuthToken: hasAuthToken,
+      authTokenMatched: authTokenMatched,
+      type: event.data.type,
+      payload: event.data.payload
+    });
+
+
 
     // Handle both prefixed and unprefixed message types for backward compatibility
     const messageType = event.data.type;
@@ -322,16 +347,16 @@ if (!window.carbonBarInjected && !inIframe) {
     ccLogger.debug('Processing message:', { original: messageType, unprefixed: unprefixedType });
 
     // Special handling for one-way messages that don't need secure messaging or auth
-    if (messageType === 'AI_RESPONSE_CHUNK' || 
-        messageType === 'AI_RESPONSE_ERROR' || 
-        messageType === 'SET_OPENAI_KEY' || 
-        messageType === 'CHECK_OLLAMA_AVAILABLE' || 
-        messageType === 'AI_EXECUTE_TOOL') {
-        ccLogger.debug('Handling one-way message type:', messageType);
-        await handleMessage(event.data, unprefixedType);
-        ccLogger.groupEnd();
-        return;
-    }
+    //if (messageType === 'AI_RESPONSE_CHUNK' || 
+    //    messageType === 'AI_RESPONSE_ERROR' || 
+    //    messageType === 'SET_OPENAI_KEY' || 
+    //    messageType === 'CHECK_OLLAMA_AVAILABLE' || 
+    //    messageType === 'AI_EXECUTE_TOOL') {
+    //    ccLogger.debug('[SECURITYDEBUG] Handling one-way message type:', messageType);
+    //    await handleMessage(event.data, unprefixedType);
+    //    ccLogger.groupEnd();
+    //    return;
+    //}
 
     // Handle provider status updates directly without forwarding
     if (messageType === 'PROVIDER_STATUS_UPDATE') {
@@ -429,21 +454,24 @@ if (!window.carbonBarInjected && !inIframe) {
       return;
     }
 
+    
     // Only use secure messaging for CARBON_ prefixed messages from carbon-commander.js
-    if (messageType.startsWith('CARBON_') || messageType.endsWith('_RESPONSE')) {
-      // Skip auth token verification for AI response messages and initial settings request
-      if (!unprefixedType.endsWith('_RESPONSE') && 
-          unprefixedType !== 'GET_SETTINGS' && 
-          !unprefixedType.startsWith('AI_RESPONSE')) {
-        // Verify auth token for secure messages
-        if (!event.data.authToken || event.data.authToken !== window.ccAuthToken) {
-          ccLogger.error('Invalid or missing auth token in message:', {
-            received: event.data.authToken,
-            expected: window.ccAuthToken
-          });
-          ccLogger.groupEnd();
-          return;
-        }
+    if (messageType.startsWith('CARBON_')) {
+
+      if (!authTokenMatched) {
+        ccLogger.error('Invalid or missing auth token in message:', {
+          received: event.data.authToken,
+          expected: window.ccAuthToken
+        });
+        ccLogger.groupEnd();
+        return;
+      } else {
+        ccLogger.debug('Valid auth token in message:', {
+          messageType: event.data.type,
+          unprefixedType: unprefixedType,
+          received: event.data.authToken,
+          expected: window.ccAuthToken
+        });
       }
 
       // Handle messages based on unprefixed type
@@ -455,7 +483,7 @@ if (!window.carbonBarInjected && !inIframe) {
           ccLogger.debug('Skipping response message:', unprefixedType);
         }
       } catch (error) {
-        ccLogger.error('Error handling message:', error);
+        ccLogger.error('Error handling message1:', error);
       }
     } else {
       ccLogger.debug('Ignored non-CARBON message');
@@ -466,120 +494,128 @@ if (!window.carbonBarInjected && !inIframe) {
 
 // Helper function to handle messages
 async function handleMessage(message, unprefixedType) {
-  ccLogger.debug('Processing message type:', unprefixedType);
+
+  const sendResponseMsg = (response) => {
+    ccLogger.debug(`Sending ${unprefixedType} response`);
+    window.postMessage({
+      type: `CARBON_${unprefixedType}_RESPONSE`,
+      payload: response,
+      _authToken: window.ccAuthToken
+    }, window.location.origin);
+  }
+
+  ccLogger.debug('Processing message type:', unprefixedType, "message.type:", message.type);
   switch(unprefixedType) {
-    case 'AI_REQUEST':
-      ccLogger.debug('Handling AI request');
-      try {
-        var aiResponse = await aiRequest({ data: message });
-        ccLogger.debug('AI request completed:', aiResponse);
-      } catch (error) {
-        ccLogger.error('Error in AI request:', error);
-        window.postMessage({
-          type: 'AI_RESPONSE_ERROR',
-          payload: { error: error.message || 'Unknown error' }
-        }, window.location.origin);
-      }
-      break;
+    //case 'AI_REQUEST':
+    //  ccLogger.debug('Handling AI request');
+    //  try {
+    //    var aiResponse = await aiRequest({ data: message });
+    //    ccLogger.debug('AI request completed:', aiResponse);
+    //  } catch (error) {
+    //    ccLogger.error('Error in AI request:', error);
+    //    window.postMessage({
+    //      type: 'AI_RESPONSE_ERROR',
+    //      payload: { error: error.message || 'Unknown error' }
+    //    }, window.location.origin);
+    //  }
+    //  break;
 
-    case 'AI_TOOL_RESPONSE':
-      ccLogger.debug('Handling AI tool response');
-      try {
-        const toolResponse = await new Promise((resolve, reject) => {
-          const timeoutId = setTimeout(() => {
-            reject(new Error('Tool response timeout'));
-          }, 30000); // 30 second timeout
+    //case 'AI_TOOL_RESPONSE':
+    //  ccLogger.debug('Handling AI tool response');
+    //  try {
+    //    const toolResponse = await new Promise((resolve, reject) => {
+    //      const timeoutId = setTimeout(() => {
+    //        reject(new Error('Tool response timeout'));
+    //      }, 30000); // 30 second timeout
+//
+    //      // Send to chrome runtime first
+    //      chrome.runtime.sendMessage(
+    //        { 
+    //          type: 'AI_TOOL_RESPONSE', 
+    //          payload: {
+    //            success: message.payload?.success ?? true,
+    //            result: message.payload?.result,
+    //            content: message.payload?.result?.content || message.payload?.result || JSON.stringify(message.payload?.result),
+    //            name: message.payload?.name,
+    //            arguments: message.payload?.arguments,
+    //            tool_call_id: message.payload?.tool_call_id
+    //          }, 
+    //          tabId: message.tabId 
+    //        },
+    //        (response) => {
+    //          clearTimeout(timeoutId);
+    //          if (chrome.runtime.lastError) {
+    //            ccLogger.error('Error in AI_TOOL_RESPONSE:', chrome.runtime.lastError);
+    //            reject(chrome.runtime.lastError);
+    //          } else {
+    //            ccLogger.debug('AI tool response processed:', response);
+    //            // Now send completion through secure channel
+    //            window.postMessage({
+    //              type: 'CARBON_AI_TOOL_RESPONSE_COMPLETE',
+    //              payload: response
+    //            }, window.location.origin);
+    //            resolve(response);
+    //          }
+    //        }
+    //      );
+    //    });
+//
+    //    return true; // Keep message channel open
+    //  } catch (error) {
+    //    ccLogger.error('Error processing tool response:', error);
+    //    window.postMessage({
+    //      type: 'CARBON_AI_TOOL_RESPONSE_COMPLETE',
+    //      payload: { 
+    //        success: false,
+    //        error: error.message || 'Unknown error',
+    //        content: error.message || 'Unknown error'
+    //      }
+    //    }, window.location.origin);
+    //  }
+    //  break;
 
-          // Send to chrome runtime first
-          chrome.runtime.sendMessage(
-            { 
-              type: 'AI_TOOL_RESPONSE', 
-              payload: {
-                success: message.payload?.success ?? true,
-                result: message.payload?.result,
-                content: message.payload?.result?.content || message.payload?.result || JSON.stringify(message.payload?.result),
-                name: message.payload?.name,
-                arguments: message.payload?.arguments,
-                tool_call_id: message.payload?.tool_call_id
-              }, 
-              tabId: message.tabId 
-            },
-            (response) => {
-              clearTimeout(timeoutId);
-              if (chrome.runtime.lastError) {
-                ccLogger.error('Error in AI_TOOL_RESPONSE:', chrome.runtime.lastError);
-                reject(chrome.runtime.lastError);
-              } else {
-                ccLogger.debug('AI tool response processed:', response);
-                // Now send completion through secure channel
-                window.postMessage({
-                  type: 'CARBON_AI_TOOL_RESPONSE_COMPLETE',
-                  payload: response
-                }, window.location.origin);
-                resolve(response);
-              }
-            }
-          );
-        });
-
-        return true; // Keep message channel open
-      } catch (error) {
-        ccLogger.error('Error processing tool response:', error);
-        window.postMessage({
-          type: 'CARBON_AI_TOOL_RESPONSE_COMPLETE',
-          payload: { 
-            success: false,
-            error: error.message || 'Unknown error',
-            content: error.message || 'Unknown error'
-          }
-        }, window.location.origin);
-      }
-      break;
-
-    case 'SET_OPENAI_KEY':
-      ccLogger.debug('Setting OpenAI key');
-      const keyResponse = await new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage(
-          { type: 'SET_OPENAI_KEY', payload: message.payload, tabId: message.tabId },
-          (setKeyResponse) => {
-            if (chrome.runtime.lastError) {
-              ccLogger.error('Error setting OpenAI key:', chrome.runtime.lastError);
-              reject(chrome.runtime.lastError);
-            } else {
-              ccLogger.debug('OpenAI key set response:', setKeyResponse);
-              if (setKeyResponse.success) {
-                // Send provider status update directly to window
-                window.postMessage({
-                  type: 'PROVIDER_STATUS_UPDATE',
-                  provider: 'openai',
-                  status: true
-                }, window.location.origin);
-              }
-              resolve(setKeyResponse);
-            }
-          }
-        );
-      });
-      break;
-
-    case 'GET_COMMAND_HISTORY':
-      ccLogger.debug('Fetching command history');
-      const history = await CCLocalStorage.get('carbonbar_command_history');
-      window.postMessage({
-        type: 'COMMAND_HISTORY_LOADED',
-        payload: history || []
-      }, window.location.origin);
-      ccLogger.debug('Command history sent');
-      break;
+    //case 'SET_OPENAI_KEY':
+    //  ccLogger.debug('Setting OpenAI key');
+    //  const keyResponse = await new Promise((resolve, reject) => {
+    //    chrome.runtime.sendMessage(
+    //      { type: 'SET_OPENAI_KEY', payload: message.payload, tabId: message.tabId },
+    //      (setKeyResponse) => {
+    //        if (chrome.runtime.lastError) {
+    //          ccLogger.error('Error setting OpenAI key:', chrome.runtime.lastError);
+    //          reject(chrome.runtime.lastError);
+    //        } else {
+    //          ccLogger.debug('OpenAI key set response:', setKeyResponse);
+    //          if (setKeyResponse.success && !message.payload.test) {
+    //            // Send provider status update directly to window
+    //            window.postMessage({
+    //              type: 'PROVIDER_STATUS_UPDATE',
+    //              provider: 'openai',
+    //              status: true
+    //            }, window.location.origin);
+    //          }
+    //          resolve(setKeyResponse);
+    //        }
+    //      }
+    //    );
+    //  });
+    //  break;
+//
+    //case 'GET_COMMAND_HISTORY':
+    //  ccLogger.debug('Fetching command history');
+    //  const history = await CCLocalStorage.get('carbonbar_command_history');
+    //  window.postMessage({
+    //    type: 'COMMAND_HISTORY_LOADED',
+    //    payload: history || []
+    //  }, window.location.origin);
+    //  ccLogger.debug('Command history sent');
+    //  break;
 
     case 'GET_SETTINGS':
       ccLogger.debug('Fetching settings');
-      const settings = await CCLocalStorage.get('carbonbar_settings');
-      window.postMessage({
-        type: 'SETTINGS_LOADED',
-        payload: settings || {}
-      }, window.location.origin);
-      ccLogger.debug('Settings sent');
+      const settings = await getCarbonBarSettings();
+      sendResponseMsg({
+        ...settings || {}
+      });
       break;
 
     case 'GET_KEYBIND':
@@ -592,81 +628,100 @@ async function handleMessage(message, unprefixedType) {
       ccLogger.debug('Keybind sent');
       break;
 
+    case 'GET_ENCRYPTED_VALUE':
+      
+      const value = await CCLocalStorage.getEncrypted(message.payload.key);
+      ccLogger.debug('Fetching encrypted value', message.payload.key, value);
+      sendResponseMsg({
+        key: message.payload.key,
+        value: value
+      });
+      break;
+
     case 'SAVE_ENCRYPTED_VALUE':
       ccLogger.debug('Saving encrypted value');
       try {
-        await CCLocalStorage.setEncrypted(`encrypted_${message.payload.key}`, message.payload.value);
+        await CCLocalStorage.setEncrypted(message.payload.key, message.payload.value);
         ccLogger.debug('Encrypted value saved');
       } catch (error) {
         ccLogger.error('Error saving encrypted value:', error);
       }
       break;
 
+    case 'DELETE_ENCRYPTED_VALUE':
+      ccLogger.debug('Deleting encrypted value');
+      await CCLocalStorage.removeEncrypted(message.payload.key);
+      ccLogger.debug('Encrypted value deleted');
+      break;
+
     case 'SAVE_SETTINGS':
       ccLogger.debug('Saving settings');
       try {
+
+        // Remove encrypted keys from keyValuePairs, if they exist
+        if(message.payload.encryptedKeys) {
+          for(const [key, value] of message.payload.encryptedKeys.entries()) {
+            message.payload.keyValuePairs?.delete(key);
+          }
+        }
+
+        // Convert keyValuePairs map to object if it exists
+        message.payload.encryptedKeys = undefined;
+        if(message.payload.keyValuePairs && message.payload.keyValuePairs instanceof Map) {
+          message.payload.keyValuePairs = Object.fromEntries(message.payload.keyValuePairs);
+        }
+
+        // Save settings
         await CCLocalStorage.set('carbonbar_settings', message.payload);
-        ccLogger.debug('Settings saved');
+        ccLogger.debug('Settings saved, sending GET_SETTINGS');
+
+        // Fire a GET_SETTINGS message
+        await handleMessage(message, 'GET_SETTINGS');
       } catch (error) {
         ccLogger.error('Error saving settings:', error);
       }
       break;
 
-    case 'UPDATE_ENCRYPTED_VALUE':
-      ccLogger.debug('Updating encrypted value');
-      try {
-        await CCLocalStorage.setEncrypted(`encrypted_${message.payload.key}`, message.payload.value);
-        ccLogger.debug('Encrypted value updated');
-      } catch (error) {
-        ccLogger.error('Error updating encrypted value:', error);
-      }
-      break;
-
-    // Handle all other messages without secure messaging
+    // Handle all other messages to @chrome-ai-service.js ?
     default:
       if (message.type) {
-        ccLogger.debug('Handling default message type:', unprefixedType);
+        ccLogger.debug('Handling default message type:', unprefixedType, message);
         try {
-          if (unprefixedType === 'AI_EXECUTE_TOOL' && message.payload?.tool) {
-            ccLogger.debug('Processing AI tool execution:', message.payload.tool);
-            const toolResponse = await new Promise((resolve, reject) => {
-              chrome.runtime.sendMessage(
-                { 
-                  type: 'AI_TOOL_RESPONSE',
-                  payload: {
-                    success: true,
-                    result: message.payload.tool.result,
-                    content: message.payload.tool.result?.content || message.payload.tool.result || JSON.stringify(message.payload.tool.result),
-                    name: message.payload.tool.name,
-                    arguments: message.payload.tool.arguments,
-                    tool_call_id: message.payload.tool.id
-                  },
-                  tabId: message.tabId 
-                },
-                (response) => {
-                  if (chrome.runtime.lastError) {
-                    ccLogger.error('Error in AI tool execution:', chrome.runtime.lastError);
-                    reject(chrome.runtime.lastError);
-                  } else {
-                    ccLogger.debug('AI tool execution completed:', response);
-                    resolve(response);
-                  }
-                }
-              );
-            });
-            return true;
-          }
+          //if (unprefixedType === 'AI_EXECUTE_TOOL' && message.payload?.tool) {
+          //  ccLogger.debug('Processing AI tool execution:', message.payload.tool);
+          //  const toolResponse = await new Promise((resolve, reject) => {
+          //    chrome.runtime.sendMessage(
+          //      { 
+          //        type: 'AI_TOOL_RESPONSE',
+          //        payload: {
+          //          success: true,
+          //          result: message.payload.tool.result,
+          //          content: message.payload.tool.result?.content || message.payload.tool.result || JSON.stringify(message.payload.tool.result),
+          //          name: message.payload.tool.name,
+          //          arguments: message.payload.tool.arguments,
+          //          tool_call_id: message.payload.tool.id
+          //        },
+          //        tabId: message.tabId 
+          //      },
+          //      (response) => {
+          //        if (chrome.runtime.lastError) {
+          //          ccLogger.error('Error in AI tool execution:', chrome.runtime.lastError);
+          //          reject(chrome.runtime.lastError);
+          //        } else {
+          //          ccLogger.debug('AI tool execution completed:', response);
+          //          resolve(response);
+          //        }
+          //      }
+          //    );
+          //  });
+          //  return true;
+          //}
 
           await new Promise((resolve, reject) => {
-            chrome.runtime.sendMessage(
-              { 
-                type: unprefixedType, 
-                payload: message.payload,
-                tabId: message.tabId 
-              },
+            chrome.runtime.sendMessage(message,
               (defaultResponse) => {
                 if (chrome.runtime.lastError) {
-                  ccLogger.error('Error in message:', chrome.runtime.lastError);
+                  ccLogger.error('Error in message:', unprefixedType, chrome.runtime.lastError);
                   reject(chrome.runtime.lastError);
                 } else if (defaultResponse) {
                   ccLogger.debug('Received response:', defaultResponse);
@@ -677,11 +732,17 @@ async function handleMessage(message, unprefixedType) {
                       provider: 'ollama',
                       status: defaultResponse.available
                     }, window.location.origin);
+                  } else if (unprefixedType === 'CHECK_OPENAI_AVAILABLE') {
+                    window.postMessage({
+                      type: 'PROVIDER_STATUS_UPDATE',
+                      provider: 'openai',
+                      status: defaultResponse.available
+                    }, window.location.origin);
                   }
-                  window.postMessage({
+                  sendResponseMsg({
                     type: unprefixedType + '_RESPONSE',
                     payload: defaultResponse
-                  }, window.location.origin);
+                  });
                   resolve(defaultResponse);
                 } else {
                   ccLogger.debug('No response received');
@@ -691,57 +752,59 @@ async function handleMessage(message, unprefixedType) {
             );
           });
         } catch (error) {
-          ccLogger.error('Error handling message:', error);
-          window.postMessage({
+          ccLogger.error('Error handling message2:', error);
+          sendResponseMsg({
             type: unprefixedType + '_ERROR',
             payload: { error: error.message || 'Unknown error' }
-          }, window.location.origin);
+          });
         }
+      } else {
+        ccLogger.error('Handling default message type:', unprefixedType, message);
       }
       break;
   }
 }
 
-const aiRequest = async (event) => {
-    try {
-        const tabId = event.data.tabId || (await getCurrentTabId());
-        ccLogger.debug('AI_REQUEST', event.data.payload, tabId);
-        
-        return await new Promise((resolve, reject) => {
-            const messageHandler = (response) => {
-                ccLogger.debug('AI_REQUEST_RESPONSE', response);
-                if (chrome.runtime.lastError) {
-                    ccLogger.error('[aiRequest] AI_REQUEST_RESPONSE1', response);
-                    reject(new Error(chrome.runtime.lastError.message));
-                } else if (response && response.error) {
-                    ccLogger.error('[aiRequest] AI_REQUEST_RESPONSE2', response);
-                    reject(new Error(response.error));
-                } else {
-                    ccLogger.debug('[aiRequest] AI_REQUEST_RESPONSE3', response);
-                    resolve(response);
-                }
-            };
-
-            chrome.runtime.sendMessage(
-                { type: 'AI_REQUEST', payload: event.data.payload, tabId },
-                messageHandler
-            );
-        });
-    } catch (error) {
-        ccLogger.error('AI_RESPONSE_ERROR2:', error);
-        throw error;
-    }
-}
+//const aiRequest = async (event) => {
+//    try {
+//        const tabId = event.data.tabId || (await getCurrentTabId());
+//        ccLogger.debug('AI_REQUEST', event.data.payload, tabId);
+//        
+//        return await new Promise((resolve, reject) => {
+//            const messageHandler = (response) => {
+//                ccLogger.debug('AI_REQUEST_RESPONSE', response);
+//                if (chrome.runtime.lastError) {
+//                    ccLogger.error('[aiRequest] AI_REQUEST_RESPONSE1', response);
+//                    reject(new Error(chrome.runtime.lastError.message));
+//                } else if (response && response.error) {
+//                    ccLogger.error('[aiRequest] AI_REQUEST_RESPONSE2', response);
+//                    reject(new Error(response.error));
+//                } else {
+//                    ccLogger.debug('[aiRequest] AI_REQUEST_RESPONSE3', response);
+//                    resolve(response);
+//                }
+//            };
+//
+//            chrome.runtime.sendMessage(
+//                { type: 'AI_REQUEST', payload: event.data.payload, tabId },
+//                messageHandler
+//            );
+//        });
+//    } catch (error) {
+//        ccLogger.error('AI_RESPONSE_ERROR2:', error);
+//        throw error;
+//    }
+//}
 
 // Replace the getCurrentTabId function with a simpler version that uses the meta tag
-function getCurrentTabId() {
-    return new Promise((resolve) => {
-        const tabIdMeta = document.querySelector('meta[name="tabId"]');
-        if (tabIdMeta) {
-            resolve(tabIdMeta.getAttribute('content'));
-        } else {
-            ccLogger.error('TabId meta tag not found');
-            resolve(null);
-        }
-    });
-}
+//function getCurrentTabId() {
+//    return new Promise((resolve) => {
+//        const tabIdMeta = document.querySelector('meta[name="tabId"]');
+//        if (tabIdMeta) {
+//            resolve(tabIdMeta.getAttribute('content'));
+//        } else {
+//            ccLogger.error('TabId meta tag not found');
+//            resolve(null);
+//        }
+//    });
+//}

@@ -52,16 +52,22 @@ class AICaller {
         this.defaultProvider = provider;
     }
 
-    async setOpenAIKey(key) {
+    async setOpenAIKey(key, testOnly = false, save = false) {
         ccLogger.group('Setting OpenAI API Key');
         try {
             // Test the key before setting it
             await this.openai.testKey(key);
             
-            // If test passes, set it in the OpenAI client
-            this.openai.setApiKey(key);
-            this.setDefaultProvider('openai');
-            ccLogger.info('OpenAI API key set successfully');
+            if(!testOnly) {
+                // If test passes, set it in the OpenAI client
+                this.openai.setApiKey(key, save);
+                this.setDefaultProvider('openai');
+                ccLogger.info('OpenAI API key set successfully');
+                if(save) {
+                    ccLogger.info('OpenAI API key saved to storage');
+
+                }
+            }
             ccLogger.groupEnd();
             return true;
         } catch (error) {

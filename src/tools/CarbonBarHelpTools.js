@@ -397,16 +397,23 @@ Need more details? Try:
             scope.logMessage('set_openai_key', key);
             return new Promise((resolve, reject) => {
                 window.postMessage({
-                    type: 'SET_OPENAI_KEY',
+                    type: 'CARBON_SET_OPENAI_KEY',
                     payload: {
-                        key: key
+                        key: key,
+                        save: true
                     }
                 }, window.location.origin);
 
                 const listener = (event) => {   
-                    if (event.data.type === 'SET_OPENAI_KEY_RESPONSE') {
-                        scope.logMessage('SET_OPENAI_KEY_RESPONSE', event.data, event.data.payload);
-                        if(event.data === true || event.data?.payload === true){
+                    if (event.data.type === 'CARBON_SET_OPENAI_KEY_RESPONSE') {
+                        const payload = event.data.payload?.payload || event.data.payload;
+                        scope.logMessage('CARBON_SET_OPENAI_KEY_RESPONSE', event.data, payload);
+                        if(payload.success === true){
+                            window.postMessage({
+                                type: 'PROVIDER_STATUS_UPDATE',
+                                provider: 'openai',
+                                status: true
+                            }, window.location.origin);
                             resolve({success: true, content: 'OpenAI key set successfully'});
                         }else{
                             resolve({success: false, content: 'Failed to set OpenAI key'});

@@ -1,14 +1,51 @@
 /**
  * Global logger implementation for Carbon Commander
  */
+let ccLoggerPrefix = '';
+
+export const ccDefaultKeybind = {
+    key: 'k',
+    ctrl: true,
+    meta: false
+};
+
+
+export const ccOneTimeMessageHandler = async (requestId) => {
+    return new Promise((resolve) => {
+        const messageHandler = (event) => {
+            window.removeEventListener('message', messageHandler);
+            resolve(event);
+        };
+        window.addEventListener(`${requestId}_RESPONSE`, messageHandler);
+    });
+}
+
 export const ccLogger = {
-    log: console.log.bind(console),
-    info: console.info.bind(console),
-    warn: console.warn.bind(console),
-    error: console.error.bind(console),
-    debug: console.debug.bind(console),
-    group: console.group.bind(console),
-    groupEnd: console.groupEnd.bind(console),
+    prefix: ccLoggerPrefix,
+    setPrefix: (prefix) => {
+        ccLoggerPrefix = prefix;
+    },
+    log: (...args) => {
+        console.log(ccLoggerPrefix, ...args);
+    },
+    info: (...args) => {
+        console.info(ccLoggerPrefix, ...args);
+    },
+    warn: (...args) => {
+        console.warn(ccLoggerPrefix, ...args);
+    },
+    error: (...args) => {
+        console.error(ccLoggerPrefix, ...args);
+    },
+    debug: (...args) => {
+        console.debug(ccLoggerPrefix, ...args);
+    },
+    group: (...args) => {
+        console.group(ccLoggerPrefix, ...args);
+    },
+    groupEnd: (...args) => {
+        console.groupEnd(ccLoggerPrefix, ...args);
+    },
     time: console.time.bind(console),
     timeEnd: console.timeEnd.bind(console)
 };

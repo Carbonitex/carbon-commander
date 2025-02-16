@@ -25,6 +25,8 @@ import { ccLogger, AICallerModels } from '../global.js';
 import settings from './settings.js';
 import styles from './carbon-commander.css';
 
+ccLogger.setPrefix('[CARBONBAR]');
+
 class CarbonCommander {
     constructor(currentApp) {
       this.currentApp = currentApp || `CarbonCommander [${window.location.hostname}]`;
@@ -35,6 +37,37 @@ class CarbonCommander {
       this.authTokenInitialized = false;
       this.initializationComplete = false;
       this.messageQueue = [];
+      this.isVisible = false;
+      this.messages = [];
+      this.accumulatedChunks = '';
+      this.activeDialog = null;
+      this.dialogCallback = null;
+      this.activeDialogs = new Map(); // Track multiple active dialogs
+      this.commandHistory = [];
+      this.historyIndex = -1;
+      this.hasNoAIMode = false;
+      this.connectedProviders = new Set();
+      this.messageKeyStates = new Map(); // Track message keys
+      this.activeMessagePorts = new Map(); // Track active message ports
+      this.pendingSecureMessages = new Set(); // Track message IDs we've sent
+
+      // Autocomplete properties
+      this.lastAutocompleteRequest = null;
+      this.autocompleteDebounceTimer = null;
+      this.autocompleteDelay = 300; // Increased from 150ms to 300ms for better performance
+      this.lastAutocompleteInput = ''; // Add tracking for last input
+      this.minAutocompleteLength = 2; // Minimum characters before triggering autocomplete
+
+      // Initialize HMAC key from script data attribute
+      const script = document.querySelector('script[cc-data-key]');
+      if (script) {
+        const keyBase64 = script.getAttribute('cc-data-key');
+        if (keyBase64) {
+          this.initializeHMACKey(keyBase64).catch(error => {
+            ccLogger.error('Error initializing HMAC key:', error);
+          });
+        }
+      }
 
       var tabId = document.querySelector('meta[name="tabId"]').getAttribute('content');
       ccLogger.info("Initializing with tabId:", tabId);
@@ -78,16 +111,7 @@ class CarbonCommander {
       this.container = document.createElement('div');
       this.shadow.appendChild(this.container);
       
-      this.isVisible = false;
-      this.messages = [];
-      this.accumulatedChunks = '';
-      this.activeDialog = null;
-      this.dialogCallback = null;
-      this.activeDialogs = new Map(); // Track multiple active dialogs
-      this.commandHistory = [];
-      this.historyIndex = -1;
-      this.hasNoAIMode = false;
-      this.connectedProviders = new Set();
+
       
       // Setup event listeners first
       this.setupEventListeners();
@@ -95,36 +119,15 @@ class CarbonCommander {
       // Set up settings with postMessage handler
       this.settings.setPostMessageHandler((message) => this.postMessage(message));
       
-      // Initialize after event listeners are set up
-      this.initialize();
-      
       document.body.appendChild(this.root);
-
-      // Update autocomplete properties with better defaults
-      this.lastAutocompleteRequest = null;
-      this.autocompleteDebounceTimer = null;
-      this.autocompleteDelay = 300; // Increased from 150ms to 300ms for better performance
-      this.lastAutocompleteInput = ''; // Add tracking for last input
-      this.minAutocompleteLength = 2; // Minimum characters before triggering autocomplete
 
       this.ollamaCheckInterval = null;
 
-      setTimeout(() => {
-        this.checkOllamaAvailability();
-      }, 1000);
-
-      // Add MCP status tracking
-      this.mcpStatusInterval = null;
-      this.startMCPStatusChecks();
-
-      // Initialize settings and auth token
-      this.postMessage({ type: 'GET_SETTINGS' });
+      // Initialize after event listeners are set up
+      this.waitForAuthThenInitialize();
     }
 
-    async initialize() {
-      // Request settings first to get auth token
-      this.postMessage({ type: 'GET_SETTINGS' });
-      
+    async waitForAuthThenInitialize() {      
       // Wait for auth token to be initialized
       await new Promise(resolve => {
         const checkAuthToken = () => {
@@ -137,8 +140,7 @@ class CarbonCommander {
         checkAuthToken();
       });
 
-      // Now that we have the auth token, load command history and initialize
-      this.loadCommandHistory();
+      // Now that we have the auth token, initialize
       await this.init();
       this.initializationComplete = true;
     }
@@ -283,6 +285,25 @@ class CarbonCommander {
 
       // Load settings
       await this.settings.load();
+
+      // Load command history
+      this.loadCommandHistory();
+
+      setTimeout(() => {
+        this.checkOllamaAvailability(1000, 10);
+      }, 500);
+
+      ccLogger.debug('Checking OpenAI availability', { noAIMode: this.hasNoAIMode });
+      this.postMessage({ 
+        type: "CHECK_OPENAI_AVAILABLE",
+        payload: {
+          noAIMode: this.hasNoAIMode
+        }
+      });
+
+      // Add MCP status tracking
+      this.mcpStatusInterval = null;
+      this.startMCPStatusChecks();
     }
   
     setupEventListeners() {
@@ -309,23 +330,34 @@ class CarbonCommander {
           this.showModelDownloadProgress(progress);
       });
 
-      window.addEventListener("message", async (event) => {
+      const tempMessageHandler = async (event, unprefixedType) => {
         // Handle settings loaded message first to get auth token
-        if (event.data.type === 'SETTINGS_LOADED') {
-          ccLogger.debug('SETTINGS_LOADED', event.data.payload);
-          if (event.data.payload?._authToken) {
-            this.authToken = event.data.payload._authToken;
+        if (unprefixedType === 'GET_SETTINGS_RESPONSE') {
+          if (event.data._authToken && !this.authTokenInitialized) {
+            this.authToken = event.data._authToken;
             this.authTokenInitialized = true;
             ccLogger.debug('AUTH_TOKEN_INITIALIZED', this.authToken);
-            delete event.data.payload._authToken; // Remove token from settings object
+            delete event.data._authToken; // Remove token from settings object
           }
           // Continue with normal settings handling...
         }
 
-        if (event.data.type === 'AI_EXECUTE_TOOL' || event.data.type === 'CARBON_AI_EXECUTE_TOOL') {
-          const toolName = event.data.payload.tool.name;
-          const toolArgs = event.data.payload.tool.arguments;
+        // Handle our new confirmation dialog type
+        if (unprefixedType === 'SHOW_ACCESS_REQUEST_RESPONSE') {
+            this.handleAccessRequest(event.data);
+        }
 
+        if (unprefixedType === 'AI_EXECUTE_TOOL_RESPONSE') {
+          if(!event.data._authToken || !event.data._authToken == this.authToken) {
+            ccLogger.debug('[RCV]','Invalid auth token', event.data);
+            return;
+          }
+          
+          const payload = event.data.payload?.payload || event.data.payload;
+
+          const toolName = payload.tool.name;
+          const toolArgs = payload.tool.arguments;
+        
           ccLogger.debug('Received tool execution request:', toolName, toolArgs);
           const tool = this.toolCaller.getTool(toolName);
           if (!tool) {
@@ -333,9 +365,13 @@ class CarbonCommander {
             this.postMessage({ 
               type: 'AI_TOOL_RESPONSE', 
               payload: { 
-                success: false,
-                result: `Tool not found: ${toolName}`,
-                error: `Tool not found: ${toolName}`
+                result: {
+                  success: false,
+                  error: `Tool not found: ${toolName}`
+                },
+                name: toolName,
+                arguments: toolArgs,
+                tool_call_id: tool?.id
               }
             });
             return;
@@ -347,9 +383,10 @@ class CarbonCommander {
             this.postMessage({ 
               type: 'AI_TOOL_RESPONSE', 
               payload: {
-                ...result,
+                result: result,
                 name: toolName,
-                arguments: toolArgs
+                arguments: toolArgs,
+                tool_call_id: tool?.id
               }
             });
           } catch (error) {
@@ -358,9 +395,11 @@ class CarbonCommander {
             this.postMessage({ 
               type: 'AI_TOOL_RESPONSE', 
               payload: {
-                success: false,
-                error: error.message,
-                content: error.message,
+                result: {
+                  success: false,
+                  error: error.message
+                },  
+                stop: true,
                 tool_call_id: tool?.id,
                 name: toolName,
                 arguments: toolArgs
@@ -370,33 +409,31 @@ class CarbonCommander {
         }
 
         // Handle AI responses
-        if (event.data.type === 'AI_RESPONSE_CHUNK' || 
-            event.data.type === 'CARBON_AI_RESPONSE_CHUNK' ||
-            event.data.type === 'AI_RESPONSE_ERROR' || 
-            event.data.type === 'CARBON_AI_RESPONSE_ERROR') {
+        if (unprefixedType === 'AI_CHUNK_RESPONSE' || 
+            unprefixedType === 'AI_ERROR_RESPONSE') {
             this.handleAIResponse(event.data);
         }
 
-        if (event.data.type === 'SHOW_CONFIRMATION_DIALOG') {
+        if (unprefixedType === 'SHOW_CONFIRMATION_DIALOG') {
             this.showConfirmationDialog(
-                event.data.payload.prompt,
+                event.data.payload,
                 event.data.payload.callback
             );
         }
 
-        if (event.data.type === 'SHOW_INPUT_DIALOG') {
+        if (unprefixedType === 'SHOW_INPUT_DIALOG') {
             this.showInputDialog(
                 event.data.payload,
                 event.data.payload.callback
             );
         }
 
-        if (event.data.type === 'COMMAND_HISTORY_LOADED') {
+        if (unprefixedType === 'COMMAND_HISTORY_LOADED') {
           this.commandHistory = event.data.payload || [];
           this.historyIndex = this.commandHistory.length;
         }
 
-        if (event.data.type === 'AUTOCOMPLETE_SUGGESTION') {
+        if (unprefixedType === 'AUTOCOMPLETE_SUGGESTION') {
             const suggestion = event.data.payload;
             if (suggestion) {
                 ccLogger.debug('showAutocompleteSuggestion', suggestion);
@@ -404,14 +441,14 @@ class CarbonCommander {
             }
         }
 
-        if (event.data.type === 'PROVIDER_STATUS_UPDATE') {
+        if (unprefixedType === 'PROVIDER_STATUS_UPDATE') {
           ccLogger.debug('PROVIDER_STATUS_UPDATE', event.data.provider, event.data.status);
           this.updateProviderStatus(event.data.provider, event.data.status);
-
+        
           if(event.data.provider == 'openai' && event.data.status){
             this.connectedProviders.add('openai');
           }
-
+        
           if(this.hasNoAIMode && this.connectedProviders.has('openai') && this.connectedProviders.has('ollama')){
             this.hasNoAIMode = false;
             this.currentApp = await this.toolCaller.getToolScope(this).appName;
@@ -419,17 +456,17 @@ class CarbonCommander {
             this.sendFakeAIResponse("🎉 All AI providers connected! You can now use all features.", 500);
             this.sendFakeAIResponse("Go ahead and hit ESC or Ctrl+K to close and reopen the command bar to enter normal mode.", 1000);
           }
-
+        
           if (event.data.provider == 'ollama' && event.data.status && this.ollamaCheckInterval) {
             clearInterval(this.ollamaCheckInterval);
             this.ollamaCheckInterval = null;
           }
-
+        
           if (event.data.status && this.hasNoAIMode) {
             if (this.connectedProviders.size > 0) {
               //this.hasNoAIMode = false; //Keep this disabled unless openai is connected
               //this.sendFakeAIResponse("🎉 AI provider connected! You can now use all features.", 500);
-
+            
               // If connectedProviders does not contain openai, we need to prompt the user to connect it
               if (event.data.provider == 'ollama' && !this.connectedProviders.has('openai')) {
                 this.sendFakeAIResponse("💡 **Tip:** While Ollama provides local AI capabilities, adding OpenAI can greatly enhance functionality with more advanced models like GPT-4.\n\nTo connect OpenAI:\n1. Get an API key from [OpenAI's platform](https://platform.openai.com/api-keys)\n2. Use the command: `set openai-key YOUR_API_KEY`", 1000);
@@ -440,41 +477,231 @@ class CarbonCommander {
           }
         }
 
-        if (event.data.type === 'MCP_SERVICE_CONFIG') {
+        if (unprefixedType === 'MCP_SERVICE_CONFIG') {
           const config = event.data.payload;
           await this.mcpToolCaller.configureMCPService(config);
           this.updateMCPStatus();
         }
 
-        if (event.data.type === 'MCP_SERVICE_STATUS') {
+        if (unprefixedType === 'MCP_SERVICE_STATUS') {
           const { serviceId, status } = event.data.payload;
           this.updateProviderStatus(`mcp:${serviceId}`, status.connected);
         }
 
-        if (event.data.type === 'TOGGLE_CARBONBAR') {
+        if (unprefixedType === 'TOGGLE_CARBONBAR') {
           this.toggle();
         }
 
-        if (event.data.type === 'SHOW_KEYBIND_DIALOG') {
+        if (unprefixedType === 'SHOW_KEYBIND_DIALOG') {
           this.showKeybindDialog();
         }
 
-        if (event.data.type === 'SET_KEYBIND') {
+        if (unprefixedType === 'SET_KEYBIND') {
           this.keybind = event.data.payload;
         }
+      }
+
+      window.addEventListener("message", (event) => {
+        // We only accept messages from ourselves
+        if (event.source !== window) {
+          ccLogger.warn('Message from external source');
+          //return;
+        }
+
+        // Handle secure message channel setup
+        if (event.data.type === 'SECURE_MESSAGE_DONT_HANDLEATM') {
+          ccLogger.debug('Setting up secure message channel');
+          const port = event.ports[0];
+          const messageId = event.data.messageId;
+          if (!port || !messageId) {
+            ccLogger.error('Missing port or messageId for secure channel');
+            return;
+          }
+
+          // Verify this is a message we sent
+          if(event.data.messageType == 'AI_TOOL_EXECUTE') {
+            ccLogger.debug('Received secure message for AI tool execute:', messageId, event.data);
+          } else if (!this.pendingSecureMessages.has(messageId)) {
+            ccLogger.warn('Received secure message for unknown message ID:', messageId, event.data);
+            return;
+          } else {
+            ccLogger.debug('Received secure message for known message ID:', messageId, event.data);
+          }
+
+          // Store port reference and initialize key state
+          this.activeMessagePorts.set(messageId, port);
+          this.messageKeyStates.set(messageId, this.hmacKey);
+          ccLogger.debug('Initialized message state with HMAC key');
+
+          // Start port immediately
+          port.start();
+          ccLogger.debug('Started message port');
+
+          // Listen for messages on the port
+          port.onmessage = async (e) => {
+            const message = e.data;
+            try {
+              const counter = message._counter;
+              ccLogger.debug('Received message on secure channel:', { 
+                type: message.type,
+                counter,
+                messageId 
+              });
+
+              // Get current key for this message
+              const currentKey = this.messageKeyStates.get(messageId);
+              if (!currentKey) {
+                throw new Error('No key found for message');
+              }
+
+              // Verify the message signature
+              const isValid = await this.verifySignature(message.data, message.signature, currentKey);
+              if (!isValid) {
+                throw new Error('Invalid message signature');
+              }
+
+              // Process the actual message
+              const unprefixedType = message.data.type.replace(/^CARBON_/, '');
+              ccLogger.debug('Processing secure message:', unprefixedType);
+              
+              // Handle the message based on its type
+              await tempMessageHandler({ data: message.data }, unprefixedType);
+
+              // Derive and update to next key
+              const nextKey = await this.deriveNextKey(currentKey, `${messageId}-${counter}`);
+              if (nextKey) {
+                this.messageKeyStates.set(messageId, nextKey);
+                ccLogger.debug('Updated message key');
+              }
+              
+            } catch (error) {
+              ccLogger.error('Error in secure message handling:', error);
+              // Send error back through port
+              port.postMessage({
+                error: error.message,
+                counter: message?._counter
+              });
+            }
+          };
+
+          // Handle port closure and cleanup
+          port.onclose = () => {
+            ccLogger.debug('Secure message port closed:', messageId);
+            this.messageKeyStates.delete(messageId);
+            this.activeMessagePorts.delete(messageId);
+            this.pendingSecureMessages.delete(messageId);
+          };
+
+          return;
+        }
+
+        if(event.data.type == 'PROVIDER_STATUS_UPDATE' || event.data.type == 'SET_KEYBIND') {
+          event.data.type = 'CARBON_' + event.data.type;
+        }
+
+        if(!event.data.type || (!event.data.type.startsWith('CARBON_') && !event.data.type.startsWith('CB_'))) {
+          ccLogger.debug('[RCV]','Unknown message type', event.data);
+          return;
+        }
+
+        const unprefixedType = event.data.type.replace('CARBON_', '').replace('CB_', '');
+        ccLogger.debug('[RCV]', event.data.type, event.data);
+        tempMessageHandler(event, unprefixedType);
       });
     }
 
     sendFakeAIResponse(content, delay = 500) {
       setTimeout(() => {
         this.handleAIResponse({
-          type: 'AI_RESPONSE_CHUNK',
+          type: 'AI_CHUNK_RESPONSE',
           payload: {
             content: content,
             isFinished: true
           }
         });
       }, delay); // Small delay to separate messages
+    }
+
+    deriveNextKey = async (currentKey, salt) => {
+      try {
+        // Export current key to raw bytes if it's a CryptoKey object
+        const rawKey = currentKey instanceof CryptoKey ? 
+          await crypto.subtle.exportKey("raw", currentKey) :
+          currentKey;
+        
+        // Use HKDF to derive a new key
+        const encoder = new TextEncoder();
+        const keyMaterial = await crypto.subtle.importKey(
+          "raw",
+          rawKey,
+          { name: "HKDF" },
+          false,
+          ["deriveBits"]
+        );
+
+        const bits = await crypto.subtle.deriveBits(
+          {
+            name: "HKDF",
+            hash: "SHA-256",
+            salt: encoder.encode(salt),
+            info: encoder.encode("CarbonCommanderRatchet")
+          },
+          keyMaterial,
+          256
+        );
+
+        // Convert derived bits to new HMAC key
+        return await crypto.subtle.importKey(
+          "raw",
+          bits,
+          {
+            name: "HMAC",
+            hash: { name: "SHA-256" }
+          },
+          true,
+          ["sign", "verify"]
+        );
+      } catch (error) {
+        ccLogger.error('Error deriving next key:', error);
+        return null;
+      }
+    }
+
+    verifySignature = async (message, signature, key) => {
+      try {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(JSON.stringify(message));
+        return await crypto.subtle.verify(
+          "HMAC",
+          key,
+          signature,
+          data
+        );
+      } catch (error) {
+        ccLogger.error('Error verifying signature:', error);
+        return false;
+      }
+    }
+
+    initializeHMACKey = async (keyBase64) => {
+      try {
+        const rawKey = Uint8Array.from(atob(keyBase64), c => c.charCodeAt(0));
+        const hmacKey = await crypto.subtle.importKey(
+          "raw",
+          rawKey,
+          {
+            name: "HMAC",
+            hash: { name: "SHA-256" }
+          },
+          true,
+          ["sign", "verify"]
+        );
+        // Store initial key for each message channel
+        this.hmacKey = hmacKey;
+        ccLogger.debug('HMAC key initialized');
+      } catch (error) {
+        ccLogger.error('Error initializing HMAC key:', error);
+      }
     }
 
     getCurrentResultContainer() {
@@ -534,7 +761,7 @@ class CarbonCommander {
       const container = this.container.querySelector('.cc-container');
       container.classList.remove('processing', 'tool-running');
       container.classList.add('has-error');
-      ccLogger.debug('AI_RESPONSE_ERROR', error);
+      ccLogger.debug('AI_ERROR_RESPONSE', error);
       let errorMessage = error.message || error.content || 'Unknown error';
       if(errorMessage.length > 0) {
         switch(errorMessage) {
@@ -548,7 +775,7 @@ class CarbonCommander {
               ccError.innerHTML = this.getNoProviderHtml();
               this.resultsContainer.appendChild(ccError);
               // Start periodic Ollama check
-              this.checkOllamaAvailability();
+              this.checkOllamaAvailability(5000);
             } else {
               this.sendFakeAIResponse(errorMessage);
             }
@@ -571,18 +798,18 @@ class CarbonCommander {
       if (payload.error) {
         ccLogger.error('AI response error:', payload.error);
         this.displayError(payload);
-      } else if (message.type == 'AI_RESPONSE_ERROR') {
+      } else if (message.type == 'AI_ERROR_RESPONSE') {
         ccLogger.error('AI response error:', payload);
         this.displayError(payload);
       } 
       //else {
       if (typeof payload.content === 'string' && payload.content.length > 0) {
         const chunk = payload.content;
-        ccLogger.debug('AI_RESPONSE_CHUNK2', payload.error, message.type, chunk);
+        ccLogger.debug('AI_CHUNK_RESPONSE2', payload.error, message.type, chunk);
         this.accumulatedChunks += chunk;
         const htmlContent = marked.parse(this.accumulatedChunks);
         const resultContainer = this.getCurrentResultContainer();
-        ccLogger.debug('AI_RESPONSE_CHUNK3', resultContainer);
+        ccLogger.debug('AI_CHUNK_RESPONSE3', resultContainer);
         let aiOutput = resultContainer.querySelector('.cc-ai-output');
 
         if(!aiOutput || aiOutput.classList.contains('state_finished')) {
@@ -718,7 +945,7 @@ Tell them that they can refresh the page to enter normal mode.`;
         messages: msgs,
         model: AICallerModels.FAST, //this will be set by the ai-service if null
         tools: CarbonBarHelpTools.GetNoAIModeToolInfo(),
-        temp: 0.8,
+        temp: 0.6,
         keepAlive: '30m',
         provider: 'openai'
       };
@@ -757,7 +984,7 @@ Available tools are being limited. For more advanced features, recommend connect
         messages: msgs,
         model: 'mistral-small',//AICallerModels.FAST,
         tools: CarbonBarHelpTools.GetNoAIModeToolInfo(),
-        temp: 0.7,
+        temp: 0.5,
         keepAlive: '30m',
         provider: 'ollama'
       };
@@ -895,7 +1122,7 @@ Available tools are being limited. For more advanced features, recommend connect
               messages: this.messages,
               model: AICallerModels.FAST,
               tools: [...localTools, ...mcpTools], // Combine unique tools
-              temp: 0.8,
+              temp: 0.7,
               keepAlive: '30m'
             };
 
@@ -931,9 +1158,7 @@ Available tools are being limited. For more advanced features, recommend connect
 
 
     //TODO: If vision enabled, allow uploads of images (maybe documents)
-    //TODO: git
     //TODO: Thumbs up/down or star/unstar for commands, or assistant responses
-    //TODO: Seperate some of the toolscope functions to their own files
 
     updateTitle(title) {
       this.container.querySelector('.cc-title').textContent = title;
@@ -992,77 +1217,73 @@ Available tools are being limited. For more advanced features, recommend connect
       }
     }
 
-    showConfirmationDialog(prompt, callback) {
-        // Store callback
-        this.dialogCallback = callback;
-
-        // Create dialog HTML
+    showConfirmationDialog(config, callback) {
+        // Create dialog HTML with animation
         const dialogHTML = `
-            <div class="cc-dialog">
+            <div class="cc-dialog" style="animation: messageAppear 0.3s ease-in-out forwards;">
                 <div class="cc-dialog-content">
-                    <p>${prompt}</p>
+                    <p>${config.prompt}</p>
                     <div class="cc-dialog-buttons">
-                        <button class="cc-button confirm">Yes</button>
-                        <button class="cc-button cancel">No</button>
+                        <button class="cc-button confirm" data-action="confirm">Yes</button>
+                        <button class="cc-button cancel" data-action="cancel">No</button>
                     </div>
                 </div>
             </div>
         `;
 
-        // Add dialog to results container
-        const dialogElement = document.createElement('div');
-        dialogElement.innerHTML = dialogHTML;
-        this.resultsContainer.appendChild(dialogElement);
-        this.activeDialog = dialogElement;
+        // Create dialog container if it doesn't exist
+        let dialogContainer = this.container.querySelector('.cc-dialog-container');
+        if (!dialogContainer) {
+            dialogContainer = document.createElement('div');
+            dialogContainer.classList.add('cc-dialog-container');
+            this.container.appendChild(dialogContainer);
+        }
 
-        // Add event listeners
-        const confirmBtn = dialogElement.querySelector('.confirm');
-        const cancelBtn = dialogElement.querySelector('.cancel');
+        // Insert the dialog HTML
+        dialogContainer.innerHTML = dialogHTML;
+        const dialog = dialogContainer.querySelector('.cc-dialog');
 
-        confirmBtn.addEventListener('click', () => {
-            const container = this.container.querySelector('.cc-container');
-            container.classList.remove('processing');
-            container.classList.add('waiting-input');
-            
-            this.postMessage({
-                type: 'CONFIRMATION_DIALOG_RESPONSE',
-                payload: {
-                    tool_call_id: callback,
-                    confirmed: true
-                }
+        // Add click handlers for buttons
+        const buttons = dialog.querySelectorAll('.cc-button');
+        buttons.forEach(button => {
+            button.addEventListener('click', () => {
+                const action = button.dataset.action;
+                const confirmed = action === 'confirm';
+
+                // Animate dialog out
+                dialog.style.animation = 'messageAppear 0.3s ease-in-out reverse';
+                
+                setTimeout(() => {
+                    // Remove the dialog
+                    dialogContainer.remove();
+
+                    // Send response through secure messaging
+                    this.postMessage({
+                        type: 'CB_DIALOG_RETURN',
+                        payload: {
+                            requestId: config.requestId,
+                            confirmed: confirmed
+                        }
+                    });
+                }, 300); // Match animation duration
             });
-            this.handleDialogResponse(true);
-            
-            // Remove dialog element
-            dialogElement.remove();
-            this.activeDialog = null;
         });
 
-        cancelBtn.addEventListener('click', () => {
-            const container = this.container.querySelector('.cc-container');
-            container.classList.remove('processing');
-            container.classList.add('waiting-input');
-            
-            this.postMessage({
-                type: 'CONFIRMATION_DIALOG_RESPONSE',
-                payload: {
-                    tool_call_id: callback,
-                    confirmed: false
-                }
-            });
-            this.handleDialogResponse(false);
-            
-            // Remove dialog element
-            dialogElement.remove();
-            this.activeDialog = null;
-        });
+        // Add escape key handler
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                buttons[1].click(); // Trigger cancel button
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
 
         // Scroll to dialog
         this.resultsContainer.scrollTop = this.resultsContainer.scrollHeight;
     }
 
     showInputDialog(config, callback) {
-        const dialogId = 'input_dialog_' + Math.random().toString(36).substr(2, 9);
+        const dialogId = 'input_dialog_' + config.requestId;
         
         // Create dialog HTML
         const dialogHTML = `
@@ -1104,9 +1325,10 @@ Available tools are being limited. For more advanced features, recommend connect
 
         const submitDialog = () => {
             this.postMessage({
-                type: 'INPUT_DIALOG_RESPONSE',
+                type: 'CB_DIALOG_RETURN',
                 payload: {
                     tool_call_id: config.tool_call_id,
+                    requestId: config.requestId,
                     input: input.value
                 }
             });
@@ -1125,7 +1347,7 @@ Available tools are being limited. For more advanced features, recommend connect
 
         cancelBtn.addEventListener('click', () => {
             this.postMessage({
-                type: 'INPUT_DIALOG_RESPONSE',
+                type: 'CB_DIALOG_RETURN',
                 payload: {
                     tool_call_id: config.tool_call_id,
                     input: null
@@ -1166,6 +1388,10 @@ Available tools are being limited. For more advanced features, recommend connect
 
     // Add new methods to handle command history persistence
     async loadCommandHistory() {
+
+      ccLogger.debug('loadCommandHistory: DISABLED ATM');
+      return;
+
       try {
         this.postMessage({ type: "GET_COMMAND_HISTORY" });
       } catch (error) {
@@ -1174,6 +1400,10 @@ Available tools are being limited. For more advanced features, recommend connect
     }
 
     async saveCommandHistory() {
+
+      ccLogger.debug('saveCommandHistory: DISABLED ATM');
+      return;
+
       try {
         this.postMessage({ 
           type: "SAVE_COMMAND_HISTORY", 
@@ -1237,6 +1467,11 @@ Available tools are being limited. For more advanced features, recommend connect
     }
 
     newAutocompleteRequest(input, requestId) {
+
+      ccLogger.debug('newAutocompleteRequest CURRENT DISABLED', input, requestId);
+      return;
+
+
         if (this.autocompleteDebounceTimer) {
             clearTimeout(this.autocompleteDebounceTimer);
             this.autocompleteDebounceTimer = null;
@@ -1309,12 +1544,19 @@ Available tools are being limited. For more advanced features, recommend connect
         }
     }
 
-    async checkOllamaAvailability() {
+    async checkOllamaAvailability(interval = 1000, maxCount = -1) {
       ccLogger.time('ollamaCheck');
       var fastCheck = true;
       let count = 0;
       if (!this.ollamaCheckInterval) {
         this.ollamaCheckInterval = setInterval(async () => {
+          count++;
+          if(maxCount > 0 && count > maxCount && !this.hasNoAIMode){
+            ccLogger.debug('Ollama check complete', { count: count - 1 });
+            clearInterval(this.ollamaCheckInterval);
+            this.ollamaCheckInterval = null;
+            return;
+          }
           try {
             ccLogger.debug('Checking Ollama availability', { noAIMode: this.hasNoAIMode });
             this.postMessage({ 
@@ -1323,14 +1565,12 @@ Available tools are being limited. For more advanced features, recommend connect
                 noAIMode: this.hasNoAIMode
               }
             });
+            
+
           } catch (error) {
             ccLogger.error('Ollama check failed:', error);
           }
-          count++;
-          if(count > 5){
-            fastCheck = false;
-          }
-        }, fastCheck ? 1000 : 5000);
+        }, interval);
       }
       ccLogger.timeEnd('ollamaCheck');
     }
@@ -1630,23 +1870,30 @@ Available tools are being limited. For more advanced features, recommend connect
     }
 
     // Modify postMessage helper method to use secure messaging
-    postMessage(message) {
+    async postMessage(message) {
       // If we don't have an auth token yet and this isn't a settings request, queue the message
       if (!this.authTokenInitialized && message.type !== 'GET_SETTINGS') {
         this.messageQueue.push(message);
         return;
       }
 
+      // Generate a unique message ID
+      const messageId = `${Date.now()}-${Math.random()}`;
+      this.pendingSecureMessages.add(messageId);
+
       // Prefix all carbonbar messages to identify them
       const carbonMessage = {
         ...message,
-        type: 'CARBON_' + message.type,
+        type: (message.type.startsWith('CARBON_') || message.type.startsWith('CB_')) ? message.type : 'CARBON_' + message.type,
         tabId: window.tabId,
-        authToken: this.authToken
+        authToken: this.authToken,
+        _messageId: messageId
       };
 
+      ccLogger.debug('Sending message:', carbonMessage);
+
       // Use the secure messaging system
-      window.postMessage(carbonMessage, window.location.origin);
+      const promise = window.postMessage(carbonMessage, window.location.origin);
 
       // Process queued messages if initialization is complete
       if (this.initializationComplete && this.messageQueue.length > 0) {
@@ -1655,21 +1902,15 @@ Available tools are being limited. For more advanced features, recommend connect
           this.postMessage(queuedMessage);
         }
       }
-    }
-
-    // Add the missing loadSettings method
-    async loadSettings() {
-      // This method is no longer needed since we're using the settings.load() method
-      // Keeping it for backward compatibility
-      await this.settings.load();
+      return promise;
     }
 
     // Add method to handle settings loaded
     handleSettingsLoaded(settings) {
       if (settings._authToken) {
-        this.authToken = settings._authToken;
-        this.authTokenInitialized = true;
-        console.log('AUTH_TOKEN_INITIALIZED', this.authToken);
+        //this.authToken = settings._authToken;
+        //this.authTokenInitialized = true;
+        //ccLogger.debug('[SECURITYDEBUG] AUTH_TOKEN_INITIALIZED.settings', this.authToken);
         
         // Process any queued messages now that we have the auth token
         while (this.messageQueue.length > 0) {
@@ -1679,6 +1920,103 @@ Available tools are being limited. For more advanced features, recommend connect
         
         this.initializationComplete = true;
       }
+    }
+
+    handleAccessRequest(message) {
+        ccLogger.debug('handleAccessRequest', message);
+        if(message.payload?.payload) {
+            message.payload = message.payload.payload;
+        }
+        if (!message?.payload) {
+            ccLogger.error('Invalid access request message:', message);
+            return;
+        }
+
+        const { requestId, prompt } = message.payload;
+        if (!requestId) {
+            ccLogger.error('No requestId provided in access request');
+            return;
+        }
+
+        // Generate dialog HTML if not provided
+        const dialogHtml = message.payload.dialogHtml || `
+            <div class="cc-dialog">
+                <div class="cc-dialog-content">
+                    <p>${prompt || 'Allow access to this feature?'}</p>
+                    <div class="cc-dialog-buttons">
+                        <button class="cc-button confirm" data-action="confirm">Allow</button>
+                        <button class="cc-button cancel" data-action="cancel">Deny</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Create a new result item for the dialog
+        const resultContainer = document.createElement('div');
+        resultContainer.classList.add('cc-result-item');
+        this.resultsContainer.appendChild(resultContainer);
+
+        // Insert the dialog HTML into the result container
+        resultContainer.innerHTML = dialogHtml;
+        const dialog = resultContainer.querySelector('.cc-dialog');
+        if (!dialog) {
+            ccLogger.error('Failed to create dialog element');
+            resultContainer.remove();
+            return;
+        }
+
+        // Add click handlers for buttons
+        const buttons = dialog.querySelectorAll('.cc-button');
+        if (!buttons || buttons.length === 0) {
+            ccLogger.error('No buttons found in dialog');
+            resultContainer.remove();
+            return;
+        }
+
+        buttons.forEach(button => {
+            button.addEventListener('click', () => {
+                const action = button.dataset.action;
+                const confirmed = action === 'confirm';
+
+                // Animate dialog out
+                dialog.style.animation = 'messageAppear 0.3s ease-in-out reverse';
+                
+                setTimeout(() => {
+                    // Remove the dialog
+                    resultContainer.remove();
+
+                    // Send response through secure messaging
+                    this.postMessage({
+                        type: 'ACCESS_REQUEST_RESPONSE',
+                        payload: {
+                            requestId: requestId,
+                            confirmed: confirmed
+                        }
+                    });
+                }, 300); // Match animation duration
+            });
+        });
+
+        // Add escape key handler
+        const escHandler = (e) => {
+            if (e.key === 'Escape' && resultContainer.isConnected) {
+                const cancelButton = Array.from(buttons).find(btn => btn.dataset.action === 'cancel');
+                if (cancelButton) {
+                    cancelButton.click(); // Trigger cancel button
+                }
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+
+        // Show results container if hidden
+        this.resultsContainer.style.display = 'block';
+        this.resultsContainer.classList.remove('hidden');
+
+        // Scroll to dialog
+        if (this.resultsContainer) {
+            this.resultsContainer.scrollTop = this.resultsContainer.scrollHeight;
+        }
     }
 }
 

@@ -5,11 +5,11 @@ let currentToolResolvePromise = null;
 let setOpenAIKeyIndex = 0;
 
 const ccLogMessage = (...args) => {
-    console.log('[CarbonCommander]', ...args);
+    console.log('[CCSW]', ...args);
 }
 
 const ccLogError = (...args) => {
-    console.error('[CarbonCommander]', ...args);
+    console.error('[CCSW]', ...args);
 }
 
 
@@ -30,49 +30,62 @@ chrome.action.onClicked.addListener((tab) => {
     })
 })
 
+function sendMessageToTab(tabId, authToken, type, payload) {
+    if(!type.startsWith('CARBON_')) {
+        type = 'CARBON_' + type;
+    }
+    ccLogMessage('Sending message to tab:', tabId, type, payload, 'authToken:', authToken);
+    chrome.tabs.sendMessage(tabId, {
+        type: type,
+        payload: payload,
+        _authToken: authToken,
+        fromServiceWorker: true
+    }).then((response) => {
+        ccLogMessage('Message sent to tab:', response);
+    }).catch((error) => {
+        ccLogError('Error sending message to tab:', error);
+    });
+}
 
 
 
-
-const toolCaller = async (tool) => {
+const toolCaller = async (tabId, authToken, tool) => {
   try {
     ccLogMessage('toolCaller', tool);
     
     // Send message to content script
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
     if (!tab) {
-        throw new Error('No active tab found');
+        throw new Error('Tab no longer exists');
     }
 
     const currentToolPromise = new Promise((resolve) => {
         currentToolResolvePromise = resolve;
-        chrome.tabs.sendMessage(tab.id, {
-            type: 'AI_EXECUTE_TOOL',
-            payload: {
-                tool: tool
-            }
+        sendMessageToTab(tabId, authToken, 'AI_EXECUTE_TOOL', {
+            tool: tool
         });
     });
 
     const result = await currentToolPromise;
     if(!result.success) {
-      ccLogMessage('toolCallerResult', result, tool);
+      ccLogMessage('toolCallerResult1', result, tool);
       //throw new Error(JSON.stringify(result));
     }
 
-    ccLogMessage('toolCallerResult', result, tool);
-    // Add tool ID to the response
-    return {
+    const response = {
         ...result,
         tool_call_id: tool.id
     };
+    ccLogMessage('toolCallerResult2', response, tool, result);
+    // Add tool ID to the response
+    return response;
   } catch (error) {
     ccLogError('Error in toolCaller:', error);
     throw error;
   }
 };
 
-async function handleAIRequest(tabId, request) {
+async function handleAIRequest(tabId, authToken, request) {
     try {
         // Check if tab exists before proceeding
         const tab = await chrome.tabs.get(tabId).catch(() => null);
@@ -89,31 +102,24 @@ async function handleAIRequest(tabId, request) {
             (chunk) => {
 
               ccLogMessage('[handleAIRequest] CHUNK:', chunk);
-              const formattedChunk = {
-                type: 'AI_RESPONSE_CHUNK',
-                payload: {
-                    content: chunk,
-                    isFinished: typeof chunk === 'object' ? chunk.finish_reason == 'tool_calls' : false
-                }
-              };
-              chrome.tabs.sendMessage(tabId, formattedChunk);
+              sendMessageToTab(tabId, authToken, 'AI_CHUNK_RESPONSE', {
+                content: chunk,
+                isFinished: typeof chunk === 'object' ? chunk.finish_reason == 'tool_calls' : false
+              });
             },
             request.model,
             request.provider,
-            toolCaller,
+            (tool) => toolCaller(tabId, authToken, tool),
             request.tools,
             request.temp,
             request.keepAlive
         );
 
         // Send final chunk to indicate completion
-        await chrome.tabs.sendMessage(tabId, {
-            type: 'AI_RESPONSE_CHUNK',
-            payload: {
-                content: '',
-                isFinished: true,
-                messages: messages
-            }
+        sendMessageToTab(tabId, authToken, 'AI_CHUNK_RESPONSE', {
+            content: '',
+            isFinished: true,
+            messages: messages
         });
 
         return [response, token, messages];
@@ -122,24 +128,64 @@ async function handleAIRequest(tabId, request) {
         var messages = [...request.messages];
         messages.push({ role: 'assistant', content: error.message });
         // Send error message to tab
-        await chrome.tabs.sendMessage(tabId, {
-            type: 'AI_RESPONSE_ERROR',
-            payload: {
-                content: error.message,
-                isFinished: true,
-                error: true,
-                messages: messages
-            }
+        sendMessageToTab(tabId, authToken, 'AI_ERROR_RESPONSE', {
+            content: error.message,
+            isFinished: true,
+            error: true,
+            messages: messages
         });
         throw error;
     }
 }
 
-// Consolidate message listeners into one
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    ccLogMessage('Background received message:', message);
+    let unprefixedType = message.type.replace('CARBON_', '');
+    if (unprefixedType === 'GET_TAB_ID') {
+        sendResponse({ tabId: sender.tab.id });
+        return true;
+    }
 
-    if (message.type === 'AI_TOOL_RESPONSE') {
+    if (unprefixedType === 'CHECK_OLLAMA_AVAILABLE') {
+        try {
+            ccLogMessage('Checking Ollama availability');
+            AICaller.ollama.isAvailable().then(isAvailable => {
+                sendResponse({ available: isAvailable, noAIMode: message.payload?.noAIMode });
+            }).catch(error => {
+                ccLogError('Error checking Ollama:', error);
+                sendResponse({ available: false });
+            });
+        } catch (error) {
+            ccLogError('Error checking Ollama:', error);
+            sendResponse({ available: false });
+        }
+        return true;
+    }
+
+    if (unprefixedType === 'CHECK_OPENAI_AVAILABLE') {
+        try {
+            ccLogMessage('Checking OpenAI availability');
+            AICaller.openai.isAvailable().then(isAvailable => {
+                sendResponse({ available: isAvailable, noAIMode: message.payload?.noAIMode });
+            }).catch(error => { 
+                ccLogError('Error checking OpenAI:', error);
+                sendResponse({ available: false });
+            });
+        } catch (error) {
+            ccLogError('Error checking OpenAI:', error);
+            sendResponse({ available: false });
+        }
+        return true;
+    }
+    
+    if(!message.type || !message.type.startsWith('CARBON_')) {
+        ccLogMessage('Received non-CARBON message (BAD):', message);
+        return;
+    }
+
+
+    ccLogMessage('Background received message:', unprefixedType, message);
+
+    if (unprefixedType === 'AI_TOOL_RESPONSE') {
         ccLogMessage('Received AI_TOOL_RESPONSE', message.payload);
         if (currentToolResolvePromise) {
             currentToolResolvePromise(message.payload);
@@ -149,7 +195,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     // Add handler for confirmation dialog responses
-    if (message.type === 'CONFIRMATION_DIALOG_RESPONSE') {
+    if (unprefixedType === 'CONFIRMATION_DIALOG_RESPONSE') {
         ccLogMessage('Received CONFIRMATION_DIALOG_RESPONSE', message.payload);
         if (currentToolResolvePromise) {
             currentToolResolvePromise({success: true, result: message.payload});
@@ -159,7 +205,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     // Add handler for input dialog responses
-    if (message.type === 'INPUT_DIALOG_RESPONSE') {
+    if (unprefixedType === 'INPUT_DIALOG_RESPONSE') {
         ccLogMessage('Received INPUT_DIALOG_RESPONSE', message.payload);
         if (currentToolResolvePromise) {
             currentToolResolvePromise({success: true, result: message.payload});
@@ -168,8 +214,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    if (message.type === 'AI_REQUEST') {
-        handleAIRequest(sender.tab.id, message.payload)
+    if (unprefixedType === 'AI_REQUEST') {
+        handleAIRequest(sender.tab.id, message.authToken, message.payload)
             .then(response => {
                 ccLogMessage('AI response:', response);
                 sendResponse(response);
@@ -181,12 +227,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true; // Keep message channel open
     }
 
-    if (message.type === 'GET_TAB_ID') {
-        sendResponse({ tabId: sender.tab.id });
-        return true;
-    }
 
-    if (message.type === 'GET_AUTOCOMPLETE') {
+
+    if (unprefixedType === 'GET_AUTOCOMPLETE') {
         const { input, commandHistory, context } = message.payload;
         
         AICaller.autocomplete(input, commandHistory, context)
@@ -200,13 +243,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    if (message.type === 'SET_OPENAI_KEY') {
+    if (unprefixedType === 'SET_OPENAI_KEY') {
         (async () => {
             setOpenAIKeyIndex++;
             ccLogMessage('SET_OPENAI_KEY2', message.payload);
             try {
-                const success = await AICaller.setOpenAIKey(message.payload.key);
-                if (success) {
+                const success = await AICaller.setOpenAIKey(message.payload.key, message.payload.test, message.payload.save);
+                if (success && !message.payload.test) {
                     // Send provider status update
                     chrome.tabs.sendMessage(sender.tab.id, {
                         type: 'PROVIDER_STATUS_UPDATE',
@@ -223,19 +266,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    if (message.type === 'CHECK_OLLAMA_AVAILABLE') {
-        try {
-            AICaller.ollama.isAvailable().then(isAvailable => {
-                sendResponse({ available: isAvailable, noAIMode: message.payload?.noAIMode });
-            });
-        } catch (error) {
-            ccLogError('Error checking Ollama:', error);
-            sendResponse({ available: false });
-        }
-        return true;
-    }
 
-    if (message.type === 'REINITIALIZE_AI_CALLER') {
+
+    if (unprefixedType === 'REINITIALIZE_AI_CALLER') {
         AICaller.reinitialize().then(newProvider => {
             ccLogMessage('AICaller reinitialized with provider:', newProvider);
             sendResponse({ success: true, provider: newProvider });
@@ -243,7 +276,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    if (message.type === 'TOGGLE_PROVIDER') {
+    if (unprefixedType === 'TOGGLE_PROVIDER') {
         const { provider, enabled } = message.payload;
         if (provider === 'openai') {
             if (!enabled) {
@@ -268,5 +301,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
+    const newMessage = message.payload;
+
+    ccLogMessage('Sending message to tab:', newMessage);
+
+    sendResponse(newMessage);
     return false;
 });

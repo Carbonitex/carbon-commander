@@ -6,6 +6,15 @@
 
 // This file will be injected before the main carbonbar script
 (function() {
+  const ccLogger = {
+    log: console.log.bind(console, '[CARBONBAR-SECURE]'),
+    info: console.info.bind(console, '[CARBONBAR-SECURE]'),
+    warn: console.warn.bind(console, '[CARBONBAR-SECURE]'),
+    error: console.error.bind(console, '[CARBONBAR-SECURE]'),
+    debug: console.debug.bind(console, '[CARBONBAR-SECURE]'),
+    group: console.group.bind(console, '[CARBONBAR-SECURE]'),
+    groupEnd: console.groupEnd.bind(console, '[CARBONBAR-SECURE]'),
+  }
   const ccSecureMessaging = {
     hmacKey: null,
     messageCounter: 0,
@@ -48,7 +57,7 @@
           data
         );
       } catch (error) {
-        console.error('Error verifying signature:', error);
+        ccLogger.error('Error verifying signature:', error);
         return false;
       }
     },
@@ -93,7 +102,7 @@
           ["sign", "verify"]
         );
       } catch (error) {
-        console.error('Error deriving next key:', error);
+        ccLogger.error('Error deriving next key:', error);
         return null;
       }
     },
@@ -106,7 +115,7 @@
           throw new Error('Script context not available');
         }
         
-        const keyBase64 = script.getAttribute('data-key');
+        const keyBase64 = script.getAttribute('cc-data-key');
         if (!keyBase64) {
           throw new Error('Initialization key not found');
         }
@@ -124,25 +133,25 @@
         );
         this.messageCounter = 0;
       } catch (error) {
-        console.error('Error initializing secure messaging:', error);
+        ccLogger.error('Error initializing secure messaging:', error);
       }
     },
 
-    async verifyAndSend(message) {
+    async verifyAndSend(message, returnFunc) {
       try {
-        console.group('Secure Message Send');
-        console.log('Sending secure message:', { type: message.type, payload: message.payload });
+        ccLogger.group(`Secure Message Send`);
+        ccLogger.log('Sending secure message:', { type: message.type, payload: message.payload });
         
         if (!this.hmacKey) {
-          console.error('HMAC key not initialized');
-          console.groupEnd();
-          return;
+          ccLogger.error('HMAC key not initialized');
+          ccLogger.groupEnd();
+          return new Error('HMAC key not initialized');
         }
 
         // Create a promise that will resolve when we get a response
         const responsePromise = new Promise((resolve, reject) => {
           const messageId = `${Date.now()}-${Math.random()}`;
-          console.log('Created message channel with ID:', messageId);
+          ccLogger.log('Created message channel with ID:', messageId);
           
           const channel = new MessageChannel();
           const messageKey = this.hmacKey; // Capture current key state for this message
@@ -153,7 +162,8 @@
             _messageId: messageId,
             _counter: this.messageCounter++
           };
-          console.log('Enriched message:', { type: enrichedMessage.type, counter: enrichedMessage._counter });
+          const messageType = enrichedMessage.type;
+          ccLogger.log('Enriched message:', { type: enrichedMessage.type, counter: enrichedMessage._counter });
 
           // Store message context with isolated key state
           this.pendingMessages.set(messageId, {
@@ -162,9 +172,9 @@
             channel,
             currentKey: messageKey,
             timeout: setTimeout(() => {
-              console.warn('Message timeout for ID:', messageId);
+              ccLogger.warn('Message timeout for ID:', messageId);
               this.cleanupChannel(messageId, new Error('Message timeout'));
-            }, 30000) // Cleanup after 30 seconds
+            }, 120000) // Cleanup after 2 minutes
           });
 
           // Store channel reference
@@ -176,20 +186,20 @@
 
           // Start port immediately
           channel.port1.start();
-          console.log('Started message port for ID:', messageId);
+          ccLogger.log('Started message port for ID:', messageId);
 
           // Listen for response
           channel.port1.onmessage = async (event) => {
-            console.group('Secure Message Response');
-            console.log('Received response on port:', { messageId, data: event.data });
+            ccLogger.group('Secure Message Response');
+            ccLogger.log('Received response on port:', { messageId, data: event.data });
             
             try {
               const { data, signature, counter, error } = event.data;
 
               if (error) {
-                console.error('Error in response:', error);
+                ccLogger.error('Error in response:', error);
                 this.cleanupChannel(messageId, new Error(error));
-                console.groupEnd();
+                ccLogger.groupEnd();
                 return;
               }
 
@@ -197,17 +207,17 @@
               const activeChannel = this.activeChannels.get(messageId);
               
               if (!pendingMessage || !activeChannel) {
-                console.error('No pending message or active channel found for ID:', messageId);
-                console.groupEnd();
+                ccLogger.error('No pending message or active channel found for ID:', messageId);
+                ccLogger.groupEnd();
                 return;
               }
 
-              console.log('Verifying message signature...');
+              ccLogger.log('Verifying message signature...');
               // Verify the message with message-specific key
               const isValid = await this.verifySignature(data, signature, pendingMessage.currentKey);
 
               if (isValid) {
-                console.log('Message signature valid');
+                ccLogger.log('Message signature valid');
                 // Derive next key using current message as salt
                 const nextKey = await this.deriveNextKey(
                   pendingMessage.currentKey,
@@ -216,33 +226,38 @@
 
                 if (nextKey) {
                   this.hmacKey = nextKey;
-                  console.log('Updated HMAC key');
+                  ccLogger.log('Updated HMAC key');
                 }
 
                 // Forward verified message while preserving type
                 const { _messageId, _counter, ...cleanMessage } = data;
-                console.log('Forwarding verified message:', { type: cleanMessage.type });
+                ccLogger.log('Forwarding verified message:', { type: cleanMessage.type });
+
+
+                //
+
+
                 pendingMessage.resolve(cleanMessage);
                 this.cleanupChannel(messageId);
               } else {
-                console.error('Invalid message signature');
+                ccLogger.error('Invalid message signature');
                 this.cleanupChannel(messageId, new Error('Invalid message signature'));
               }
             } catch (error) {
-              console.error('Error processing response:', error);
+              ccLogger.error('Error processing response:', error);
               this.cleanupChannel(messageId, error);
             }
-            console.groupEnd();
+            ccLogger.groupEnd();
           };
 
           // Handle port errors
           channel.port1.onerror = (error) => {
-            console.error('Port error for message ID:', messageId, error);
+            ccLogger.error('Port error for message ID:', messageId, error);
             this.cleanupChannel(messageId, error);
           };
 
           // Send message through secure channel
-          console.log('Setting up secure channel for message ID:', messageId);
+          ccLogger.log('Setting up secure channel for message ID:', messageId);
           window.postMessage(
             { 
               type: 'SECURE_MESSAGE',
@@ -254,36 +269,51 @@
           );
 
           // Send the actual message through the port
-          console.log('Sending message through port:', { type: enrichedMessage.type });
+          ccLogger.log('Sending message through port:', { type: enrichedMessage.type });
           channel.port1.postMessage(enrichedMessage);
         });
 
         // Wait for response and forward it with original type
         const response = await responsePromise;
         if (response) {
-          console.log('Forwarding final response:', { type: response.type });
-          // Skip forwarding the original message since it will be handled by the service worker
-          // Only forward the response
-          if (response.type && response.type.endsWith('_RESPONSE')) {
+          
+
+
+
+          // If returnFunc is provided, call it with the response instead of forwarding
+          if (returnFunc) {
+            ccLogger.log('Calling returnFunc with response:', response);
+            returnFunc(response);
+          } else if (response.type && response.type.endsWith('_RESPONSE')) {
+            // Only forward the response if no returnFunc provided
+            ccLogger.log('Forwarding response:', { type: response.type });
             originalPostMessage.call(window, response, window.location.origin);
+          } else {
+            ccLogger.log('No returnFunc or response sent. Closing channel for:', messageId);
+            this.cleanupChannel(messageId);
           }
+
+          ccLogger.groupEnd();
+        } else {
+          ccLogger.error('No response from extension');
+          ccLogger.groupEnd();
+          return response;
         }
-        console.groupEnd();
       } catch (error) {
-        console.error('Error in secure messaging:', error);
-        console.groupEnd();
+        ccLogger.error('Error in secure messaging:', error);
+        ccLogger.groupEnd();
       }
     },
 
     cleanupChannel(messageId, error = null) {
-      console.log('Cleaning up channel:', messageId);
+      ccLogger.log('Cleaning up channel:', messageId);
       const pending = this.pendingMessages.get(messageId);
       const active = this.activeChannels.get(messageId);
       
       if (pending) {
         clearTimeout(pending.timeout);
         if (error) {
-          console.error('Channel cleanup with error:', error);
+          ccLogger.error('Channel cleanup with error:', error);
           pending.reject(error);
         }
       }
@@ -295,7 +325,7 @@
       
       this.pendingMessages.delete(messageId);
       this.activeChannels.delete(messageId);
-      console.log('Channel cleanup complete');
+      ccLogger.log('Channel cleanup complete');
     }
   };
 
@@ -303,34 +333,49 @@
   const originalPostMessage = window.postMessage;
 
   // Replace window.postMessage with secure version for carbonbar
-  window.postMessage = function(message, targetOrigin, transfer) {
-    if (message && message.type) {
-      if (message.type.startsWith('CARBON_')) {
-        console.log('Intercepted CARBON_ message:', { type: message.type });
-        // Skip secure channel for completion and response messages
-        if (message.type === 'CARBON_AI_TOOL_RESPONSE_COMPLETE' || 
-            message.type === 'CARBON_AI_RESPONSE_CHUNK' ||
-            message.type === 'CARBON_AI_RESPONSE_ERROR') {
-          console.log('Passing through direct message:', { type: message.type });
+  window.postMessage = async function(message, targetOrigin, transfer) {
+
+    let promise = new Promise((resolve, reject) => {
+      if (message && message.type) {
+        if (message.type.startsWith('CARBON_')) {
+          ccLogger.log('Intercepted CARBON_ message:', { type: message.type });
+          // Skip secure channel for completion and response messages
+          //f (message.type === 'CARBON_AI_TOOL_RESPONSE_COMPLETE' || 
+          //   message.type === 'CARBON_AI_RESPONSE_CHUNK' ||
+          //   message.type === 'CARBON_AI_RESPONSE_ERROR') {
+          // ccLogger.log('[SECURITYDEBUG] Passing through direct message:', { type: message.type });
+          // originalPostMessage.call(window, message, targetOrigin, transfer);
+          // return;
+          //
+          ccSecureMessaging.verifyAndSend(message, (response) => {
+            ccLogger.log('Secure message response:', response);
+            resolve(response);
+          }).catch((error) => {
+            reject(error);
+          });
+        } else if (message.type.endsWith('_RESPONSE')) {
+          ccLogger.log('Passing through response message:', { type: message.type });
+          // Add CARBON_ prefix to response messages for consistent handling
+          const carbonMessage = {
+            ...message,
+            type: 'CARBON_' + message.type
+          };
+          originalPostMessage.call(window, carbonMessage, targetOrigin, transfer);
+          resolve();
+          
+        } else {
+          ccLogger.log('Passing through non-CARBON message:', { type: message.type }, message);
           originalPostMessage.call(window, message, targetOrigin, transfer);
-          return;
+          resolve();
         }
-        ccSecureMessaging.verifyAndSend(message);
-      } else if (message.type.endsWith('_RESPONSE')) {
-        console.log('Passing through response message:', { type: message.type });
-        // Add CARBON_ prefix to response messages for consistent handling
-        const carbonMessage = {
-          ...message,
-          type: 'CARBON_' + message.type
-        };
-        originalPostMessage.call(window, carbonMessage, targetOrigin, transfer);
       } else {
-        console.log('Passing through non-CARBON message:', { type: message.type });
         originalPostMessage.call(window, message, targetOrigin, transfer);
+        resolve();
       }
-    } else {
-      originalPostMessage.call(window, message, targetOrigin, transfer);
-    }
+      //resolve();
+    });
+
+    return promise;
   };
 
   // Initialize immediately using the script's data attribute

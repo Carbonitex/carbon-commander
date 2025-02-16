@@ -12,16 +12,20 @@ class OpenAIClient {
         this.defaultModel = OpenAIClient.FAST_MODEL;
     }
 
-    setApiKey(key) {
-        ccLogger.debug('Setting OpenAI API key');
+    setApiKey(key, save = false) {
+        ccLogger.debug('Setting OpenAI API key', save);
         this.apiKey = key;
+        OpenAIClient.isAvailable = (key && key.length > 0);
+        if(save) {
+            CCLocalStorage.setEncrypted('openai-key', key);
+        }
     }
 
     async isAvailable() {
         if(OpenAIClient.isAvailable == null) {
             try {
                 // Get the key from the new encrypted storage location
-                const key = await CCLocalStorage.getEncrypted('encrypted_openai-key');
+                const key = await CCLocalStorage.getEncrypted('openai-key');
                 
                 OpenAIClient.isAvailable = (key && key.length > 0);
                 if(OpenAIClient.isAvailable) {
@@ -160,7 +164,8 @@ class OpenAIClient {
                     
                     ccLogger.debug('Calling tool:', toolCall.function.name);
                     const parsedArgs = JSON.parse(toolCall.function.arguments);
-                    const toolCallerResult = await toolCaller({ name: toolCall.function.name, arguments: parsedArgs });
+                    const toolCallerResult = await toolCaller({ id: toolCall.id, name: toolCall.function.name, arguments: parsedArgs });
+
                     chunkedOutput({
                         type: 'TOOL_CALL_CHUNK',
                         payload: {
@@ -174,11 +179,11 @@ class OpenAIClient {
                         }
                     });
                     ccLogger.debug('Tool execution result:', {
-                        success: toolCallerResult.success,
-                        hasError: !!toolCallerResult.error
+                        success: toolCallerResult.result.success,
+                        hasError: !!toolCallerResult.result.error
                     });
 
-                    if(toolCallerResult && toolCallerResult.success) {
+                    if(toolCallerResult?.result && toolCallerResult.result.success) {
                         messages.push({
                             role: 'tool',
                             tool_call_id: toolCall.id,
@@ -198,15 +203,11 @@ class OpenAIClient {
                             content = 'An unknown error occurred.';
                         }
 
-                        // ai suggested this below? Could be useful ill keep it...
-                        if(content.includes('429')) {
-                            content = 'Rate limit exceeded. Please try again later.';
-                        }
 
                         messages.push({
                             role: 'tool',
                             tool_call_id: toolCall.id,
-                            content: content
+                            content: typeof content === 'string' ? content : JSON.stringify(content)
                         });
                     }
                 }
@@ -248,6 +249,19 @@ class OpenAIClient {
 
         if(!outputToken) {
             outputToken = (s) => {};
+        }
+
+        for(var message of messages) {
+            if(message.tool_calls) {
+                for(var toolCall of message.tool_calls) {
+                    if(toolCall.function?.arguments && typeof toolCall.function.arguments !== 'string') {
+                        toolCall.function.arguments = JSON.stringify(toolCall.function.arguments);
+                    }
+                }
+            }
+            if(message.content && typeof message.content !== 'string') {
+                message.content = JSON.stringify(message.content);
+            }
         }
 
         const request = {
@@ -358,17 +372,7 @@ class OpenAIClient {
                         if (finishReason) {
                             if (toolCalls.length > 0) {
                                 for(var toolCall of toolCalls) {
-                                    outputToken({
-                                        type: 'TOOL_CALL_CHUNK',
-                                        payload: {
-                                            id: toolCall.id,
-                                            index: toolCall.index,
-                                            name: toolCall.function.name,
-                                            arguments: toolCall.function.arguments,
-                                            callFinished: true,
-                                            result: toolCall.result
-                                        }
-                                    });
+                                    ccLogger.debug('Tool call:', toolCall.function.name, toolCall.function.arguments);
                                 }
                                 ccLogger.groupEnd();
                                 return {

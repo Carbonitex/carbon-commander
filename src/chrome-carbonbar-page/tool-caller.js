@@ -1,11 +1,6 @@
-import { ccLogger } from '../global.js';
+import { ccLogger, ccOneTimeMessageHandler } from '../global.js';
 
 class ToolCaller {
-
-    //TODO: [MAJOR] add MCP support for calling as a client.
-    //TODO: [MAJOR] Convert tools (or create a wrapper) to MCP.
-
-
     currentPageTools = null;
 
     reset() {
@@ -42,37 +37,69 @@ class ToolCaller {
     }
 
     async getToolScope(bar) {
-        ccLogger.group('Building Tool Scope');
+        ccLogger.group('Building Tool Scope', "bar.settings:", bar.settings, "bar:", bar);
         var scope = {
             bar: bar,
             settings: {
-                keyValuePairs: bar.settings?.keyValuePairs || new Map()
+                keyValuePairs: bar.settings?.keyValuePairs || new Map(),
+                encryptedKeys: bar.settings?.encryptedKeys || new Map()
             },
-            logMessage: (message, important = false) => {
+            requestIdMap: new Map(),
+            logMessage: (...args) => {
+                let important = false;
+                if(typeof args[0] === 'boolean') {
+                    important = args[0];
+                    args = args.slice(1);
+                }
                 if(important) {
-                    ccLogger.info('[ToolScope] ' + message);
+                    ccLogger.info('[ToolScope]', ...args);
                 } else {
-                    ccLogger.debug('[ToolScope] ' + message);
+                    ccLogger.debug('[ToolScope]', ...args);
                 }
             },
-            logError: (message) => {
-                ccLogger.error('[ToolScope] ' + message);
+            logError: (...args) => {
+                ccLogger.error('[ToolScope]', ...args);
             },
-            promptUserForConfirmation: async (args) => {
+            promptAccessRequest: async (args) => {
                 const { prompt, default_value } = args;
-                return new Promise((resolve) => {
+                const promise = new Promise(async (resolve) => {
                     // Generate a unique ID for this request
                     const requestId = Math.random().toString(36).substr(2, 9);
 
+                    const messageHandler = (event) => {
+                        // ick, I dont really like how this looks.
+                        
+                        if(event.data.type && event.data.type === 'CARBON_ACCESS_REQUEST_RESPONSE_RESPONSE' && event.data.payload.payload.requestId === requestId) {
+                            ccLogger.debug('CARBON_ACCESS_REQUEST_RESPONSE_RESPONSE2', event, "payload:", event.data.payload.payload);
+                            window.removeEventListener('message', messageHandler);
+                            const response = event.data.payload.payload;
+                            if(response.confirmed) {
+                                ccLogger.debug('CONFIRMATION_DIALOG_RESPONSE', 'granted', response);
+                                resolve(response);
+                            } else {
+                                ccLogger.debug('CONFIRMATION_DIALOG_RESPONSE', 'denied', response);
+                                resolve(response);
+                            }
+
+                        } else {
+                            ccLogger.debug('CARBON_ACCESS_REQUEST_RESPONSE_RESPONSE1', requestId, event);
+                        }
+                    };
+                    window.addEventListener('message', messageHandler);
+
                     // Send message to command bar to show confirmation dialog
                     bar.postMessage({
-                        type: 'SHOW_CONFIRMATION_DIALOG',
+                        type: 'SHOW_ACCESS_REQUEST',
                         payload: {
                             requestId: requestId,
                             prompt: prompt
                         }
                     });
+
                 });
+                var result = await promise;
+                ccLogger.debug('CONFIRMATION_DIALOG_RESPONSE2', 'result:', result);
+                return result;
             }
         }
         //Apply the current toolsets scope functions

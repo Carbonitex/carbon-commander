@@ -11,7 +11,7 @@ class OllamaClient {
     
     constructor() {
         this.defaultModel = OllamaClient.FAST_MODEL;
-        this.callIndex = -1;
+        this.callIndex = 0;
         this.available = null;
         //this.apiKey = null;
 
@@ -330,11 +330,14 @@ class OllamaClient {
                 for(var toolCall of token.message.tool_calls) { 
                     ccLogger.debug('Processing tool call:', {
                         name: toolCall.name,
-                        index: toolCall.index
+                        index: toolCall.index,
+                        id: toolCall.id
                     });
                     messages.push({
                         role: 'assistant',
                         tool_calls: [{
+                            id: `toolCall_${toolCall.id}`,
+                            type: 'function',
                             function: {
                                 index: toolCall.index,
                                 name: toolCall.name,
@@ -344,7 +347,8 @@ class OllamaClient {
                     });   
                     messages.push({
                         role: 'tool',
-                        content: JSON.stringify(toolCall.result)
+                        content: JSON.stringify(toolCall.result),
+                        tool_call_id: `toolCall_${toolCall.id}`
                     });
                 }
             } else {
@@ -390,6 +394,16 @@ class OllamaClient {
 
         if(!outputToken) {
             outputToken = (s) => {};
+        }
+
+        for(var message of messages) {
+            if(message.tool_calls) {
+                for(var toolCall of message.tool_calls) {
+                    if(toolCall.function?.arguments && typeof toolCall.function.arguments === 'string') {
+                        toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
+                    }
+                }
+            }
         }
 
         const request = {

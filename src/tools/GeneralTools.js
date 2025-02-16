@@ -284,10 +284,35 @@ class GeneralTools {
                     mainContent = document.querySelector(body_query_selector);
                 }
                 
-                // TODO: If this is too long, we should cut it off at 20000 words, then mention that it was cut off and how much more
+                const wordLimit = 10000;
+                const charLimit = wordLimit * 5;
+                const chatCount = mainContent.textContent.trim().length;
+                const wordCount = mainContent.textContent.trim().split(/\s+/).length;
+
+                if(chatCount > charLimit || wordCount > wordLimit) {
+
+                    const trimmedContent = mainContent.textContent.trim().slice(0, 5000);
+                    const trimmedWordCount = trimmedContent.split(/\s+/).length;
+                    const trimmedChatCount = trimmedContent.length;
+
+                    const content = `
+${trimmedContent}
+
+
+Content is too long. The output has been limited. Try again with a more specific query or use the body_query_selector to target a specific part of the page.
+Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} / ${wordCount}
+                    `.trim();
+
+                    return {
+                        success: true,
+                        content: content
+                    };
+                }
+
+
                 const content = {
                     text: mainContent.textContent.trim(),
-                    wordCount: mainContent.textContent.trim().split(/\s+/).length,
+                    wordCount: wordCount,
                     html: include_html ? mainContent.innerHTML : null
                 };
 
@@ -315,8 +340,6 @@ class GeneralTools {
         }
     };
 
-    // TODO: general webpage stuff
-
     static PromptUserForConfirmation = {
         function: {
             name: 'prompt_user_for_confirmation',
@@ -339,10 +362,12 @@ class GeneralTools {
                 
                 // Create a one-time message handler for this specific request
                 const messageHandler = (event) => {
-                    if (event.data.type === 'CONFIRMATION_DIALOG_RESPONSE' && event.data.requestId === requestId) {
+                    const payload = event.data.payload?.payload || event.data.payload;
+                    scope.logMessage('CB_DIALOG_RETURN', payload);
+                    if (event.data.type === 'CB_DIALOG_RETURN' && payload.requestId === requestId) {
                         window.removeEventListener('message', messageHandler);
-                        scope.logMessage('CONFIRMATION_DIALOG_RESPONSE', event.data);
-                        if (event.data.confirmed) {
+                        scope.logMessage('CB_DIALOG_RETURN', event.data);
+                        if (payload.confirmed) {
                             resolve({
                                 success: true,
                                 result: 'User granted permission'
@@ -359,12 +384,26 @@ class GeneralTools {
                 // Add the message listener
                 window.addEventListener('message', messageHandler);
 
+                // Create dialog HTML with animations
+                const dialogHtml = `
+                    <div class="cc-dialog" style="animation: messageAppear 0.3s ease-in-out forwards;">
+                        <div class="cc-dialog-content">
+                            <p>${prompt}</p>
+                            <div class="cc-dialog-buttons">
+                                <button class="cc-button confirm" data-action="confirm">Confirm</button>
+                                <button class="cc-button cancel" data-action="cancel">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
                 // Send message to command bar to show confirmation dialog
                 window.postMessage({
-                    type: 'SHOW_CONFIRMATION_DIALOG',
+                    type: 'CB_SHOW_CONFIRMATION_DIALOG',
                     payload: {
                         requestId: requestId,
-                        prompt: prompt
+                        prompt: prompt,
+                        dialogHtml: dialogHtml
                     }
                 }, window.location.origin);
             });
@@ -405,10 +444,12 @@ class GeneralTools {
                 
                 // Create a one-time message handler for this specific request
                 const messageHandler = (event) => {
-                    if (event.data.type === 'INPUT_DIALOG_RESPONSE' && event.data.requestId === requestId) {
-                        scope.logMessage('INPUT_DIALOG_RESPONSE', event.data);
+                    const payload = event.data.payload?.payload || event.data.payload;
+                    scope.logMessage('CB_DIALOG_RETURN', payload);
+                    if (event.data.type === 'CB_DIALOG_RETURN' && payload.requestId === requestId) {
+                        
                         window.removeEventListener('message', messageHandler);
-                        const input = event.data.input;
+                        const input = payload.input;
                         if (input !== null) {
                             resolve({
                                 success: true,
@@ -428,7 +469,7 @@ class GeneralTools {
 
                 // Send message to command bar to show input dialog
                 window.postMessage({
-                    type: 'SHOW_INPUT_DIALOG',
+                    type: 'CB_SHOW_INPUT_DIALOG',
                     payload: {
                         requestId: requestId,
                         type: type,
@@ -619,81 +660,6 @@ class GeneralTools {
                     value: {
                         type: 'string',
                         description: 'The API key value to set (only required for "set" action)'
-                    }
-                },
-                required: ['action', 'key_name']
-            }
-        },
-        execute: async function(scope, args) {
-            const { action, key_name, value } = args;
-            
-            try {
-                if (action === 'get') {
-                    // For security reasons, we don't return the actual key value
-                    // Instead, we return whether it's set or not
-                    const keyExists = scope.settings?.keyValuePairs?.has(key_name) && 
-                                    scope.settings?.keyValuePairs?.get(key_name)?.length > 0;
-                    
-                    return {
-                        success: true,
-                        result: {
-                            key_name,
-                            is_set: keyExists,
-                            is_encrypted: scope.settings?.encryptedKeys?.has(key_name)
-                        }
-                    };
-                } else if (action === 'set') {
-                    if (!value) {
-                        return {
-                            success: false,
-                            error: 'Value is required for set action'
-                        };
-                    }
-
-                    if (key_name === 'openai-key') {
-                        // Use the existing SetOpenAIKey tool's functionality
-                        return await CarbonBarHelpTools.SetOpenAIKey.execute(scope, { key: value });
-                    }
-
-                    // For future key types, add handling here
-                    return {
-                        success: false,
-                        error: `Unsupported key_name: ${key_name}`
-                    };
-                }
-
-                return {
-                    success: false,
-                    error: `Invalid action: ${action}`
-                };
-            } catch (error) {
-                return {
-                    success: false,
-                    error: error.message
-                };
-            }
-        }
-    };
-
-    static ManageAPIKey = {
-        function: {
-            name: 'manage_api_key',
-            description: 'Get or set API keys for various services. Use this to manage API keys for OpenAI and other services.',
-            parameters: {
-                properties: {
-                    action: {
-                        type: 'string',
-                        description: 'The action to perform: "get" or "set"',
-                        enum: ['get', 'set']
-                    },
-                    key_name: {
-                        type: 'string',
-                        description: 'The name of the API key to manage (e.g., "openai-key")',
-                        enum: ['openai-key']
-                    },
-                    value: {
-                        type: 'string',
-                        description: 'The API key value to set (only required for "set" action)'
                     },
                     reason: {
                         type: 'string',
@@ -704,66 +670,83 @@ class GeneralTools {
             }
         },
         execute: async function(scope, args) {
-            const { action, key_name, value, reason } = args;
+            let { action, key_name, value, reason } = args;
             
-            try {
-                if (action === 'get') {
-                    const is_encrypted = scope.settings?.encryptedKeys?.has(key_name);
-                    const keyExists = scope.settings?.keyValuePairs?.has(key_name) && 
-                                    scope.settings?.keyValuePairs?.get(key_name)?.length > 0;
+            if (action === 'get') {
+                const is_encrypted = scope.settings?.encryptedKeys?.get(key_name);
+                let keyExists = is_encrypted || (scope.settings?.keyValuePairs?.has(key_name) && 
+                                scope.settings?.keyValuePairs?.get(key_name)?.length > 0);
 
-                    if(is_encrypted) {
-                        const confirmed = await scope.promptUserForConfirmation({
-                            prompt: `Allow ${reason} (and this page) access to ${key_name}?`,
-                            default_value: 'yes'
+                scope.logMessage('ManageAPIKeyDEBUG: ' + JSON.stringify({
+                    scope,
+                    settings: scope.settings,
+                    is_encrypted,
+                    keyExists,
+                    key_name,
+                    value,
+                    reason
+                }));
+                
+                if(is_encrypted) {
+                    const response = await scope.promptAccessRequest({
+                        prompt: `Allow ${reason} (and this page) access to ${key_name}?`,
+                        default_value: 'yes'
+                    });
+                    if(!response.confirmed ){
+                        return response;
+                    }
+
+                    const promise = new Promise((resolve, reject) => {
+                                            
+                        window.addEventListener('message', (event) => {
+                            if(event.data.type === 'CARBON_GET_ENCRYPTED_VALUE_RESPONSE' && event.data.payload.key === key_name) {
+                                resolve(event.data.payload.value);
+                            }
                         });
-                        if(!confirmed) {
-                            return {
-                                success: false,
-                                error: 'Access denied'
-                            };
-                        }
-                    }
-                    
-                    return {
-                        success: true,
-                        result: {
-                            key_name,
-                            is_set: keyExists,
-                            is_encrypted: is_encrypted,
-                            value: value
-                        }
-                    };
-                } else if (action === 'set') {
-                    if (!value) {
-                        return {
-                            success: false,
-                            error: 'Value is required for set action'
-                        };
-                    }
+                        scope.bar.postMessage({
+                            type: 'GET_ENCRYPTED_VALUE',
+                            payload: {
+                                key: key_name
+                            }
+                        });
+                    });
 
-                    if (key_name === 'openai-key') {
-                        // Use the existing SetOpenAIKey tool's functionality
-                        return await CarbonBarHelpTools.SetOpenAIKey.execute(scope, { key: value });
+                    value = await promise;
+                }
+                
+                return {
+                    success: true,
+                    result: {
+                        key_name,
+                        is_set: keyExists,
+                        is_encrypted: is_encrypted,
+                        value: value
                     }
-
-                    // For future key types, add handling here
+                };
+            } else if (action === 'set') {
+                if (!value) {
                     return {
                         success: false,
-                        error: `Unsupported key_name: ${key_name}`
+                        error: 'Value is required for set action'
                     };
                 }
 
+                if (key_name === 'openai-key') {
+                    // Use the existing SetOpenAIKey tool's functionality
+                    return await CarbonBarHelpTools.SetOpenAIKey.execute(scope, { key: value });
+                }
+
+                // For future key types, add handling here
                 return {
                     success: false,
-                    error: `Invalid action: ${action}`
-                };
-            } catch (error) {
-                return {
-                    success: false,
-                    error: error.message
+                    error: `Unsupported key_name: ${key_name}`
                 };
             }
+
+            return {
+                success: false,
+                error: `Invalid action: ${action}`
+            };
         }
     };
 }
