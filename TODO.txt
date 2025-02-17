@@ -11,12 +11,6 @@ TODO: Add a way to manually call tools from the chat.
 BUG: Github has keybinds that conflict with the command palette, stealing the input.
 IDEA: Tool suggestions while they are typing? Or maybe as a secondary prompt after the AI answer.
 
-TODO: Make autocomplete better and re-enable it.
-- Maybe it could request a list of responses and show multiple choices?
-- Should it generate a summary of messages and inputs as they come in, use that as context?
-
-TODO: fix command history
-- encrypt it too
-
 TODO: 'Esc' should close the topmost carbon window.
 - stop AI and TOOLS immediately if they are running, dont close window, glow it red.
+- broadcast the event so other files can handle it too.

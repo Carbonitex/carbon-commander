@@ -29,8 +29,8 @@ import { Autocomplete } from './autocomplete.js';
 ccLogger.setPrefix('[CARBONBAR]');
 
 class CarbonCommander {
-    constructor(currentApp) {
-      this.currentApp = currentApp || `CarbonCommander [${window.location.hostname}]`;
+    constructor(doc = document) {
+      this.currentApp = `CarbonCommander [${window.location.hostname}]`;
       this.toolCaller = ToolCaller;
       this.mcpToolCaller = MCPToolCaller;
       this.settings = settings;
@@ -53,7 +53,7 @@ class CarbonCommander {
       this.pendingSecureMessages = new Set(); // Track message IDs we've sent
 
       // Initialize HMAC key from script data attribute
-      const script = document.querySelector('script[cc-data-key]');
+      const script = doc.querySelector('script[cc-data-key]');
       if (script) {
         const keyBase64 = script.getAttribute('cc-data-key');
         if (keyBase64) {
@@ -63,7 +63,7 @@ class CarbonCommander {
         }
       }
 
-      var tabId = document.querySelector('meta[name="tabId"]').getAttribute('content');
+      var tabId = doc.querySelector('meta[name="tabId"]').getAttribute('content');
       ccLogger.info("Initializing with tabId:", tabId);
       window.tabId = tabId;
 
@@ -73,11 +73,11 @@ class CarbonCommander {
       ccLogger.info(`CarbonCommander initialized with tabId: ${window.tabId}`);
       
       // Create root element with shadow DOM
-      this.root = document.createElement('div');
+      this.root = doc.createElement('div');
       this.shadow = this.root.attachShadow({ mode: 'closed' });
       
       // Add styles to shadow DOM
-      const style = document.createElement('style');
+      const style = doc.createElement('style');
       style.textContent = `
         :host {
           all: initial;
@@ -102,7 +102,7 @@ class CarbonCommander {
       this.shadow.appendChild(style);
       
       // Create container for content
-      this.container = document.createElement('div');
+      this.container = doc.createElement('div');
       this.shadow.appendChild(this.container);
       
       // Setup event listeners first
@@ -111,7 +111,7 @@ class CarbonCommander {
       // Set up settings with postMessage handler
       this.settings.setPostMessageHandler((message) => this.postMessage(message));
       
-      document.body.appendChild(this.root);
+      doc.body.appendChild(this.root);
 
       this.ollamaCheckInterval = null;
 
@@ -1954,6 +1954,6 @@ function importAll(r) {
 
 importAll(require.context('../tools', true, /\.js$/));
 
+export { CarbonCommander };
 const carbonCommander = new CarbonCommander();
-
 window.carbonCommander = carbonCommander;

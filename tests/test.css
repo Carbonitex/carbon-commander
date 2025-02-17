@@ -1,0 +1,162 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+    background: #1e1e1e;
+    color: #e0e0e0;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding: 20px;
+    background: #252525;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.test-regions {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.test-categories {
+    background: #252525;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.category-title {
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #e0e0e0;
+}
+
+.test-category {
+    margin-bottom: 15px;
+}
+
+.test-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.controls {
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+button {
+    padding: 8px 16px;
+    font-size: 14px;
+    border: none;
+    border-radius: 4px;
+    background: #0066cc;
+    color: white;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+button.category-button {
+    background: #404040;
+    text-align: left;
+}
+
+button:hover {
+    background: #0052a3;
+}
+
+button.category-button:hover {
+    background: #505050;
+}
+
+button:disabled {
+    background: #333;
+    color: #666;
+    cursor: not-allowed;
+}
+
+.test-output {
+    display: grid;
+    grid-template-rows: 1fr 200px;
+    gap: 20px;
+}
+
+#results, #analysis {
+    background: #252525;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    overflow-y: auto;
+}
+
+#results {
+    white-space: pre-wrap;
+    font-family: monospace;
+    color: #e0e0e0;
+}
+
+#analysis {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.success { color: #4caf50; }
+.error { color: #f44336; }
+.warning { color: #ff9800; }
+.info { color: #29b6f6; }
+.time { color: #9e9e9e; font-style: italic; }
+
+.test-group {
+    margin: 10px 0;
+    padding: 10px;
+    border-left: 4px solid #404040;
+    background: #2d2d2d;
+}
+
+.test-group.success { border-color: #4caf50; }
+.test-group.error { border-color: #f44336; }
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.stat-box {
+    background: #2d2d2d;
+    padding: 10px;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #9e9e9e;
+}
+
+.stat-value {
+    font-size: 18px;
+    font-weight: bold;
+    margin-top: 5px;
+}
+
+.progress-bar {
+    height: 4px;
+    background: #404040;
+    margin-top: 10px;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: #4caf50;
+    width: 0%;
+    transition: width 0.3s ease;
+} 

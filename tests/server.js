@@ -8,6 +8,7 @@ const MIME_TYPES = {
     '.js': 'text/javascript',
     '.css': 'text/css',
     '.json': 'application/json',
+    '.mjs': 'text/javascript'  // Add support for ES modules
 };
 
 const server = http.createServer((req, res) => {
@@ -20,39 +21,77 @@ const server = http.createServer((req, res) => {
     }
 
     // Convert URL path to filesystem path
-    filePath = path.join(process.cwd(), 'src', filePath);
+    let fullPath;
+    if (filePath.startsWith('/tests/')) {
+        // For test files
+        fullPath = path.join(process.cwd(), filePath);
+    } else if (filePath.startsWith('/src/')) {
+        // For source files
+        fullPath = path.join(process.cwd(), filePath);
+    } else if (filePath.startsWith('/node_modules/')) {
+        // For node modules
+        fullPath = path.join(process.cwd(), filePath);
+    } else {
+        // For any other files, try src directory first, then tests
+        const srcPath = path.join(process.cwd(), 'src', filePath);
+        const testsPath = path.join(process.cwd(), 'tests', filePath);
+        const nodePath = path.join(process.cwd(), 'node_modules', filePath);
+        
+        if (fs.existsSync(srcPath)) {
+            fullPath = srcPath;
+        } else if (fs.existsSync(testsPath)) {
+            fullPath = testsPath;
+        } else if (fs.existsSync(nodePath)) {
+            fullPath = nodePath;
+        } else {
+            fullPath = path.join(process.cwd(), filePath);
+        }
+    }
 
-    // Security check: ensure path is within src directory
-    const srcDir = path.join(process.cwd(), 'src');
-    if (!filePath.startsWith(srcDir)) {
+    // Security check: ensure path is within project directory
+    const projectDir = process.cwd();
+    if (!fullPath.startsWith(projectDir)) {
         res.writeHead(403);
         res.end('Forbidden');
         return;
     }
 
     // Get file extension and corresponding MIME type
-    const extname = path.extname(filePath);
+    const extname = path.extname(fullPath);
     const contentType = MIME_TYPES[extname] || 'text/plain';
 
+    // Add CORS headers for development
+    const headers = {
+        'Content-Type': contentType,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type'
+    };
+
+    // Handle OPTIONS requests for CORS
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204, headers);
+        res.end();
+        return;
+    }
+
     // Read and serve the file
-    fs.readFile(filePath, (error, content) => {
+    fs.readFile(fullPath, (error, content) => {
         if (error) {
             if (error.code === 'ENOENT') {
-                console.error(`File not found: ${filePath}`);
+                console.error(`File not found: ${fullPath}`);
                 res.writeHead(404);
                 res.end(`File not found: ${req.url}`);
             } else {
-                console.error(`Server error: ${error.code} - ${filePath}`);
+                console.error(`Server error: ${error.code} - ${fullPath}`);
                 res.writeHead(500);
                 res.end(`Server error: ${error.code}`);
             }
         } else {
-            res.writeHead(200, { 
-                'Content-Type': contentType,
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0'
-            });
+            res.writeHead(200, headers);
             res.end(content, 'utf-8');
         }
     });
@@ -60,5 +99,8 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
     console.log(`Test server running at http://localhost:${PORT}/`);
-    console.log(`Serving files from: ${path.join(process.cwd(), 'src')}`);
+    console.log(`Serving files from:`);
+    console.log(`- ${path.join(process.cwd(), 'src')}`);
+    console.log(`- ${path.join(process.cwd(), 'tests')}`);
+    console.log(`- ${path.join(process.cwd(), 'node_modules')}`);
 }); 

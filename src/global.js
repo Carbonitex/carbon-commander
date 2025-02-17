@@ -21,33 +21,24 @@ export const ccOneTimeMessageHandler = async (requestId) => {
 }
 
 export const ccLogger = {
-    prefix: ccLoggerPrefix,
+    log: console.log,
+    info: console.info,
+    warn: console.warn,
+    error: console.error,
+    debug: console.debug,
+    group: console.group,
+    groupEnd: console.groupEnd,
+    time: console.time,
+    timeEnd: console.timeEnd,
     setPrefix: (prefix) => {
         ccLoggerPrefix = prefix;
-    },
-    log: (...args) => {
-        console.log(ccLoggerPrefix, ...args);
-    },
-    info: (...args) => {
-        console.info(ccLoggerPrefix, ...args);
-    },
-    warn: (...args) => {
-        console.warn(ccLoggerPrefix, ...args);
-    },
-    error: (...args) => {
-        console.error(ccLoggerPrefix, ...args);
-    },
-    debug: (...args) => {
-        console.debug(ccLoggerPrefix, ...args);
-    },
-    group: (...args) => {
-        console.group(ccLoggerPrefix, ...args);
-    },
-    groupEnd: (...args) => {
-        console.groupEnd(ccLoggerPrefix, ...args);
-    },
-    time: console.time.bind(console),
-    timeEnd: console.timeEnd.bind(console)
+        // Wrap console methods to include prefix
+        ccLogger.log = (...args) => console.log(ccLoggerPrefix, ...args);
+        ccLogger.info = (...args) => console.info(ccLoggerPrefix, ...args);
+        ccLogger.warn = (...args) => console.warn(ccLoggerPrefix, ...args);
+        ccLogger.error = (...args) => console.error(ccLoggerPrefix, ...args);
+        ccLogger.debug = (...args) => console.debug(ccLoggerPrefix, ...args);
+    }
 };
 
 export const AICallerModels = {

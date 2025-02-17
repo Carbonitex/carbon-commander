@@ -1,146 +1,123 @@
 import { ccLogger } from '../src/global.js';
-import { runHackerNewsTests } from './tools/external/HackerNewsToolsTest.js';
-import { runJiraTests } from './tools/external/JiraToolsTest.js';
-import { runMCPTests } from './tools/external/MCPToolsTest.js';
-import { runCarbonBarTests } from './core/CarbonBarTest.js';
-import { runServiceWorkerTests } from './core/ServiceWorkerTest.js';
-import { runToolCallerTests } from './core/ToolCallerTest.js';
-import { runIntegrationTests } from './integration/IntegrationTest.js';
-import { runAPITests } from './integration/APITest.js';
+import { HackerNewsTests } from './suites/HackerNewsTests.js';
+import { JiraTests } from './suites/JiraTests.js';
+import { MCPTests } from './suites/MCPTests.js';
+import { CarbonBarTests } from './suites/CarbonBarTests.js';
+import { ServiceWorkerTests } from './suites/ServiceWorkerTests.js';
+import { ToolCallerTests } from './suites/ToolCallerTests.js';
+import { IntegrationTests } from './suites/IntegrationTests.js';
+import { APITests } from './suites/APITests.js';
 
 class TestSuiteRunner {
     static suites = {
-        'HackerNews': runHackerNewsTests,
-        'Jira': runJiraTests,
-        'MCP': runMCPTests,
-        'CarbonBar': runCarbonBarTests,
-        'ServiceWorker': runServiceWorkerTests,
-        'ToolCaller': runToolCallerTests,
-        'Integration': runIntegrationTests,
-        'API': runAPITests
+        HackerNews: HackerNewsTests,
+        Jira: JiraTests,
+        MCP: MCPTests,
+        CarbonBar: CarbonBarTests,
+        ServiceWorker: ServiceWorkerTests,
+        ToolCaller: ToolCallerTests,
+        Integration: IntegrationTests,
+        API: APITests
     };
 
     static async runSuite(suiteName) {
         ccLogger.group(`Running Test Suite: ${suiteName}`);
-        const startTime = performance.now();
         
-        let results = {
+        const suite = this.suites[suiteName];
+        if (!suite) {
+            const error = `Test suite '${suiteName}' not found`;
+            ccLogger.error(error);
+            ccLogger.groupEnd();
+            throw new Error(error);
+        }
+
+        const results = {
             total: 0,
             passed: 0,
             failed: 0,
-            skipped: 0,
-            suites: []
+            skipped: 0
         };
 
         try {
-            if (!this.suites[suiteName]) {
-                throw new Error(`Test suite '${suiteName}' not found`);
-            }
+            ccLogger.info(`Initializing ${suiteName} test suite...`);
+            const suiteInstance = new suite();
+            const tests = Object.getOwnPropertyNames(Object.getPrototypeOf(suiteInstance))
+                .filter(prop => prop.startsWith('test') && typeof suiteInstance[prop] === 'function');
 
-            const suiteResults = await this.suites[suiteName]();
-            results.total = suiteResults.total;
-            results.passed = suiteResults.passed;
-            results.failed = suiteResults.failed;
-            results.skipped = suiteResults.skipped;
-            results.suites.push({
-                name: suiteName,
-                results: suiteResults
-            });
+            results.total = tests.length;
+            ccLogger.info(`Found ${tests.length} tests to run`);
 
-        } catch (error) {
-            ccLogger.error(`Error running suite ${suiteName}:`, error);
-            results.failed++;
-            results.total++;
-            results.suites.push({
-                name: suiteName,
-                results: {
-                    total: 1,
-                    passed: 0,
-                    failed: 1,
-                    skipped: 0,
-                    error: error.message
+            for (const testName of tests) {
+                ccLogger.group(`Running test: ${testName}`);
+                try {
+                    ccLogger.time(testName);
+                    await suiteInstance[testName]();
+                    ccLogger.timeEnd(testName);
+                    results.passed++;
+                    ccLogger.info(`✓ Test passed: ${testName}`);
+                } catch (error) {
+                    ccLogger.timeEnd(testName);
+                    if (error.message === 'SKIP') {
+                        results.skipped++;
+                        ccLogger.warn(`⚠ Test skipped: ${testName}`);
+                    } else {
+                        results.failed++;
+                        ccLogger.error(`✗ Test failed: ${testName}`);
+                        ccLogger.error(`Error: ${error.message}`);
+                        if (error.stack) {
+                            ccLogger.error(`Stack: ${error.stack}`);
+                        }
+                    }
                 }
-            });
+                ccLogger.groupEnd();
+            }
+        } catch (error) {
+            ccLogger.error(`Fatal error in suite ${suiteName}:`, error);
+            results.failed++;
         }
 
-        const endTime = performance.now();
-        const duration = ((endTime - startTime) / 1000).toFixed(2);
-
-        this.logResults(results, duration);
+        ccLogger.group(`${suiteName} Suite Results`);
+        ccLogger.info(`Total: ${results.total}`);
+        ccLogger.info(`Passed: ${results.passed}`);
+        ccLogger.info(`Failed: ${results.failed}`);
+        ccLogger.info(`Skipped: ${results.skipped}`);
+        ccLogger.groupEnd();
+        
         ccLogger.groupEnd();
         return results;
     }
 
     static async runAllTests() {
-        ccLogger.group('Running All Tests');
-        const startTime = performance.now();
+        ccLogger.group('Running All Test Suites');
         
         const results = {
             total: 0,
             passed: 0,
             failed: 0,
-            skipped: 0,
-            suites: []
+            skipped: 0
         };
 
-        for (const [suiteName, runner] of Object.entries(this.suites)) {
-            ccLogger.info(`Running ${suiteName} test suite...`);
+        for (const suiteName of Object.keys(this.suites)) {
             try {
-                const suiteResults = await runner();
+                const suiteResults = await this.runSuite(suiteName);
                 results.total += suiteResults.total;
                 results.passed += suiteResults.passed;
                 results.failed += suiteResults.failed;
                 results.skipped += suiteResults.skipped;
-                results.suites.push({
-                    name: suiteName,
-                    results: suiteResults
-                });
             } catch (error) {
-                ccLogger.error(`Error running suite ${suiteName}:`, error);
-                results.failed++;
-                results.total++;
-                results.suites.push({
-                    name: suiteName,
-                    results: {
-                        total: 1,
-                        passed: 0,
-                        failed: 1,
-                        skipped: 0,
-                        error: error.message
-                    }
-                });
+                ccLogger.error(`Failed to run suite ${suiteName}:`, error);
             }
         }
 
-        const endTime = performance.now();
-        const duration = ((endTime - startTime) / 1000).toFixed(2);
-
-        this.logResults(results, duration);
+        ccLogger.group('Final Results');
+        ccLogger.info(`Total Tests: ${results.total}`);
+        ccLogger.info(`Passed: ${results.passed}`);
+        ccLogger.info(`Failed: ${results.failed}`);
+        ccLogger.info(`Skipped: ${results.skipped}`);
+        ccLogger.groupEnd();
+        
         ccLogger.groupEnd();
         return results;
-    }
-
-    static logResults(results, duration) {
-        ccLogger.info(`
-Test Suite Final Results
-=======================
-Total Suites: ${results.suites.length}
-Total Tests: ${results.total}
-Passed: ${results.passed}
-Failed: ${results.failed}
-Skipped: ${results.skipped}
-Duration: ${duration}s
-
-Individual Suite Results:
-${results.suites.map(suite => `
-${suite.name}:
-  Total: ${suite.results.total}
-  Passed: ${suite.results.passed}
-  Failed: ${suite.results.failed}
-  Skipped: ${suite.results.skipped}
-  ${suite.results.error ? `Error: ${suite.results.error}` : ''}
-`).join('\n')}
-        `);
     }
 }
 
