@@ -74,6 +74,69 @@ class HackerNewsTools {
             }
         }
     };
+
+    static ReadComments = {
+        function: {
+            name: 'read_hn_comments',
+            description: 'Read comments from a Hacker News story',
+            parameters: {
+                properties: {
+                    story_id: {
+                        type: 'string',
+                        description: 'The ID of the story to read comments from'
+                    }
+                },
+                required: ['story_id']
+            }
+        },
+        execute: async function(scope, args) {
+            try {
+                const response = await scope.$http.get(`https://news.ycombinator.com/item?id=${args.story_id}`);
+                
+                // Parse the HTML response
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(response.data, 'text/html');
+                
+                // Get the story details
+                const story = {
+                    title: doc.querySelector('.titleline')?.textContent,
+                    score: doc.querySelector('.score')?.textContent,
+                    age: doc.querySelector('.age')?.textContent,
+                };
+
+                // Extract comments
+                const comments = [];
+                const commentRows = doc.querySelectorAll('.comtr');
+                
+                commentRows.forEach(row => {
+                    const indent = row.querySelector('.ind img')?.width || 0;
+                    const user = row.querySelector('.hnuser')?.textContent;
+                    const age = row.querySelector('.age')?.textContent;
+                    const comment = row.querySelector('.commtext')?.textContent;
+                    
+                    comments.push({
+                        id: row.id,
+                        user: user,
+                        age: age,
+                        text: comment,
+                        indentLevel: indent / 40, // HN uses 40px indentation per level
+                        url: `https://news.ycombinator.com/item?id=${row.id}`
+                    });
+                });
+
+                return { 
+                    success: true, 
+                    result: {
+                        story: story,
+                        comments: comments
+                    }
+                };
+            } catch (error) {
+                scope.logError('Error reading HN comments:', error);
+                return { success: false, error: error.message };
+            }
+        }
+    };
 }
 
 if(window.sbaiTools) {

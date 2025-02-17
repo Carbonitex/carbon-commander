@@ -170,6 +170,222 @@ class SmarterTrackPortalTools {
             }
         }
     };
+
+    static CreateTicket = {
+        function: {
+            name: 'create_ticket',
+            description: 'Create a new support ticket',
+            parameters: {
+                properties: {
+                    subject: {
+                        type: 'string',
+                        description: 'Subject of the ticket'
+                    },
+                    description: {
+                        type: 'string',
+                        description: 'Detailed description of the issue'
+                    },
+                    priority: {
+                        type: 'string',
+                        description: 'Ticket priority (low, normal, high, critical)'
+                    },
+                    department: {
+                        type: 'string',
+                        description: 'Department to assign the ticket to'
+                    }
+                },
+                required: ['subject', 'description']
+            }
+        },
+        execute: async function(scope, args) {
+            try {
+                const ticketData = {
+                    subject: args.subject,
+                    description: args.description,
+                    priority: args.priority || 'normal',
+                    departmentId: args.department || null
+                };
+
+                const response = await scope.$http.post('/api/v1/tickets', ticketData);
+                
+                return { 
+                    success: true, 
+                    result: {
+                        ticketId: response.data.ticketId,
+                        ticketNumber: response.data.ticketNumber,
+                        status: response.data.status,
+                        createdDate: response.data.createdDate
+                    }
+                };
+            } catch (error) {
+                scope.logError('Error creating ticket:', error);
+                return { success: false, error: error.message };
+            }
+        }
+    };
+
+    static UpdateTicket = {
+        function: {
+            name: 'update_ticket',
+            description: 'Update an existing ticket',
+            parameters: {
+                properties: {
+                    ticket_id: {
+                        type: 'string',
+                        description: 'ID of the ticket to update'
+                    },
+                    comment: {
+                        type: 'string',
+                        description: 'Comment to add to the ticket'
+                    },
+                    status: {
+                        type: 'string',
+                        description: 'New status for the ticket (open, closed, pending)'
+                    },
+                    priority: {
+                        type: 'string',
+                        description: 'New priority for the ticket'
+                    }
+                },
+                required: ['ticket_id']
+            }
+        },
+        execute: async function(scope, args) {
+            try {
+                const updateData = {};
+                
+                if (args.comment) {
+                    updateData.comment = args.comment;
+                }
+                if (args.status) {
+                    updateData.status = args.status;
+                }
+                if (args.priority) {
+                    updateData.priority = args.priority;
+                }
+
+                const response = await scope.$http.put(`/api/v1/tickets/${args.ticket_id}`, updateData);
+                
+                return { 
+                    success: true, 
+                    result: {
+                        ticketId: response.data.ticketId,
+                        status: response.data.status,
+                        lastUpdated: response.data.lastUpdated
+                    }
+                };
+            } catch (error) {
+                scope.logError('Error updating ticket:', error);
+                return { success: false, error: error.message };
+            }
+        }
+    };
+
+    static SearchKnowledgeBase = {
+        function: {
+            name: 'search_kb',
+            description: 'Search the knowledge base',
+            parameters: {
+                properties: {
+                    query: {
+                        type: 'string',
+                        description: 'Search query'
+                    },
+                    category: {
+                        type: 'string',
+                        description: 'Category to search in'
+                    },
+                    page: {
+                        type: 'number',
+                        description: 'Page number (default: 1)'
+                    },
+                    page_size: {
+                        type: 'number',
+                        description: 'Results per page (default: 20)'
+                    }
+                },
+                required: ['query']
+            }
+        },
+        execute: async function(scope, args) {
+            try {
+                const params = {
+                    q: args.query,
+                    page: args.page || 1,
+                    pageSize: args.page_size || 20
+                };
+                
+                if (args.category) {
+                    params.category = args.category;
+                }
+
+                const response = await scope.$http.get('/api/v1/kb/search', { params });
+                
+                const articles = response.data.articles.map(article => ({
+                    id: article.id,
+                    title: article.title,
+                    summary: article.summary,
+                    category: article.category,
+                    lastUpdated: article.lastUpdated,
+                    url: `/kb/article/${article.id}`
+                }));
+
+                return { 
+                    success: true, 
+                    result: {
+                        articles: articles,
+                        totalResults: response.data.totalResults,
+                        currentPage: response.data.currentPage,
+                        totalPages: response.data.totalPages
+                    }
+                };
+            } catch (error) {
+                scope.logError('Error searching knowledge base:', error);
+                return { success: false, error: error.message };
+            }
+        }
+    };
+
+    static GetKBArticle = {
+        function: {
+            name: 'get_kb_article',
+            description: 'Get a specific knowledge base article',
+            parameters: {
+                properties: {
+                    article_id: {
+                        type: 'string',
+                        description: 'ID of the article to retrieve'
+                    }
+                },
+                required: ['article_id']
+            }
+        },
+        execute: async function(scope, args) {
+            try {
+                const response = await scope.$http.get(`/api/v1/kb/articles/${args.article_id}`);
+                
+                return { 
+                    success: true, 
+                    result: {
+                        id: response.data.id,
+                        title: response.data.title,
+                        content: response.data.content,
+                        category: response.data.category,
+                        tags: response.data.tags,
+                        lastUpdated: response.data.lastUpdated,
+                        relatedArticles: response.data.relatedArticles?.map(article => ({
+                            id: article.id,
+                            title: article.title,
+                            url: `/kb/article/${article.id}`
+                        })) || []
+                    }
+                };
+            } catch (error) {
+                scope.logError('Error getting KB article:', error);
+                return { success: false, error: error.message };
+            }
+        }
+    };
 }
 
 if(window.sbaiTools) {

@@ -12,7 +12,8 @@ class CarbonBarHelpTools {
             CarbonBarHelpTools.GetSetupGuide.function,
             CarbonBarHelpTools.GetUsageGuide.function,
             CarbonBarHelpTools.ChangeKeybind.function,
-            CarbonBarHelpTools.ListGuides.function
+            CarbonBarHelpTools.ListGuides.function,
+            CarbonBarHelpTools.ListSiteTools.function
         ];
     }
 
@@ -598,6 +599,96 @@ Need more help? Try:
                 success: true, 
                 result: "Opening keybind configuration dialog..." 
             };
+        }
+    };
+
+    static ListSiteTools = {
+        function: {
+            name: 'list_site_tools',
+            description: 'List all available site-specific tools and their descriptions',
+            parameters: {
+                properties: {
+                    site: {
+                        type: 'string',
+                        description: 'Optional site name to filter tools (e.g., amazon, linkedin, bitbucket, stackoverflow, etc.)'
+                    }
+                }
+            }
+        },
+        execute: async function(scope, args) {
+            const { site } = args;
+            const siteToolsMap = {
+                'amazon': { class: 'AmazonTools', description: 'Tools for Amazon.com shopping and product research' },
+                'linkedin': { class: 'LinkedInTools', description: 'Tools for LinkedIn profile and job search' },
+                'bitbucket': { class: 'BitbucketTools', description: 'Tools for Bitbucket repository management' },
+                'hackernews': { class: 'HackerNewsTools', description: 'Tools for browsing and interacting with Hacker News' },
+                'smartertrack': { class: 'SmarterTrackPortalTools', description: 'Tools for SmarterTrack customer portal' },
+                'stackoverflow': { class: 'StackOverflowTools', description: 'Tools for Stack Overflow Q&A interaction' },
+                'twitch': { class: 'TwitchTools', description: 'Tools for Twitch streaming platform' },
+                'smartermail': { class: 'SmarterMailTools', description: 'Tools for SmarterMail email system' }
+            };
+
+            // Helper function to get tools for a specific toolset
+            const getToolsForClass = (className) => {
+                if (!window.sbaiTools || !window.sbaiTools[className]) {
+                    return [];
+                }
+                const toolSet = window.sbaiTools[className];
+                return Object.getOwnPropertyNames(toolSet)
+                    .filter(prop => typeof toolSet[prop] === 'object' && toolSet[prop]?.function)
+                    .map(prop => ({
+                        name: toolSet[prop].function.name,
+                        description: toolSet[prop].function.description
+                    }));
+            };
+
+            if (site) {
+                const siteKey = site.toLowerCase();
+                const siteInfo = siteToolsMap[siteKey];
+                if (siteInfo) {
+                    const tools = getToolsForClass(siteInfo.class);
+                    let result = `# ${site} Tools\n\n${siteInfo.description}\n\n`;
+                    
+                    if (tools.length > 0) {
+                        result += '## Available Tools\n\n';
+                        tools.forEach(tool => {
+                            result += `### \`${tool.name}\`\n${tool.description || 'No description available.'}\n\n`;
+                        });
+                    } else {
+                        result += '> Note: Tools will be available when visiting the corresponding website.\n';
+                    }
+                    
+                    result += '\nTo use these tools, visit the corresponding website and use Carbon Commander (Ctrl/⌘ + K).';
+                    return { success: true, result };
+                }
+                return {
+                    success: false,
+                    result: `No tools found for '${site}'. Available sites: ${Object.keys(siteToolsMap).join(', ')}`
+                };
+            }
+
+            let result = '# Available Site-Specific Tools\n\n';
+            for (const [site, info] of Object.entries(siteToolsMap)) {
+                result += `## ${site.charAt(0).toUpperCase() + site.slice(1)}\n${info.description}\n\n`;
+                const tools = getToolsForClass(info.class);
+                if (tools.length > 0) {
+                    result += '### Available Tools\n';
+                    tools.forEach(tool => {
+                        result += `- \`${tool.name}\`: ${tool.description || 'No description available.'}\n`;
+                    });
+                    result += '\n';
+                } else {
+                    result += '> Note: Tools will be available when visiting the corresponding website.\n\n';
+                }
+            }
+            
+            result += '\nTo use site-specific tools:\n';
+            result += '1. Visit the corresponding website\n';
+            result += '2. Open Carbon Commander (Ctrl/⌘ + K)\n';
+            result += '3. Click the ⚡ icon or type your command\n\n';
+            result += 'For specific site tools, use: `list_site_tools [site]`';
+
+            return { success: true, result };
         }
     };
 }

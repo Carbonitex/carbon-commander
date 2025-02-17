@@ -1,4 +1,3 @@
-
 //TODO: Reduce size of SM content returns
 
 class SmarterMailTools {
@@ -722,7 +721,7 @@ class SmarterMailTools {
     static ReadEmailsFast = {
         function: {
             name: 'read_emails_fast',
-            description: 'Get the emails including only the subject and metadata for a given folder',
+            description: 'Read emails from a folder quickly with minimal content and metadata',
             parameters: {
                 properties: {
                     message_filter: {
@@ -807,7 +806,7 @@ class SmarterMailTools {
                     },
                     include_attachments: {
                         type: 'boolean',
-                        description: 'Whether to include attachments in the email data (default = false)'
+                        description: 'Whether to include attachment details (default: false)'
                     }
                 }
             }
