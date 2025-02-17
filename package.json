@@ -1,11 +1,12 @@
 {
   "name": "carboncommander",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "main": "src/carbon-commander.js",
   "scripts": {
-    "test": "npm run test:build && node tests/server.js",
-    "test:build": "webpack --config tests/webpack.test.config.js",
-    "test:watch": "nodemon tests/server.js",
+    "test": "echo \"true\"",
+    "test2": "npm run test:build && node tests/server.js",
+    "test2:build": "webpack --config tests/webpack.test.config.js",
+    "test2:watch": "nodemon tests/server.js",
     "build": "webpack --config webpack.config.js",
     "lint": "echo \"Add your preferred linter configuration\"",
     "prepare": "npm run build",

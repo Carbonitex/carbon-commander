@@ -5,12 +5,12 @@ A powerful command palette interface for Chrome with AI-powered tools and extens
 ## Features
 
 - 🤖 AI-powered command palette with OpenAI and local Ollama support
-- 🔌 Ecosystem for external service integrations (only SmarterMail is working well atm)
+- 🔒 Secure by design with encrypted storage
 - ⚡ Real-time responses with streaming support
-- 🛠️ Extensible tool system for custom functionality
+- 🛠️ Extensible tool system with host-specific configurations
 - ⌨️ Fully customizable keyboard shortcuts
 - 🔄 Smart context-aware suggestions and autocomplete
-- 📚 Comprehensive help system and documentation built into the extension
+- 📚 Built-in help system and documentation
 
 ## Prerequisites Guide (for Beginners)
 
@@ -104,70 +104,32 @@ There are three ways to open Carbon Commander:
 2. **Extension Icon**: Click the Carbon Commander icon in your Chrome toolbar
 3. **Context Menu**: Right-click anywhere on a page and select "Carbon Commander"
 
-### Customizing the Keyboard Shortcut
+### Settings and Configuration
 
-You can change the default keyboard shortcut in three ways:
+Carbon Commander now features a comprehensive settings dialog for managing:
+- API keys (with secure, encrypted storage)
+- Keyboard shortcuts
+- Host-specific system prompts
+- Command history preferences
+- MCP service connections
 
-1. **Through the Extension UI**:
-   - Click the Carbon Commander icon in your toolbar
-   - Select "Change Keybind" from the menu
-   - Press your desired key combination
-   - Click "Save" to apply the new shortcut
+### Available Tools
 
-2. **Using Commands**:
-   - Open Carbon Commander
-   - Type `change-keybind`
-   - Press your desired key combination
-   - Click "Save" to apply
+1. **Site-Specific Tools**:
+   - Automatically activated based on the current website
+   - Deep integration with popular platforms
+   - Context-aware suggestions
+   - Real-time data processing
 
-3. **Through Chrome Settings**:
-   - Navigate to `chrome://extensions/shortcuts`
-   - Find "Carbon Commander"
-   - Click the pencil icon next to the current shortcut
-   - Press your desired key combination
-   - Click "OK" to save
-
-### Basic Commands
-
-- Type your query or command in the input field
-- Use arrow keys (↑/↓) to navigate command history
-- Press Tab to accept autocomplete suggestions
-- Press Esc to close the command palette
-
-### Help and Documentation
-
-Carbon Commander includes a comprehensive help system. Try these commands:
-
-1. **General Help**:
-   - Type `get_usage_guide general` for quick start guide
-   - Shows key features and basic usage
-
-2. **Keyboard Shortcuts**:
-   - Type `get_usage_guide keybinds` for keyboard shortcuts
-   - Learn about customizing shortcuts and navigation
-
-3. **Available Commands**:
-   - Type `get_usage_guide commands` for command list
-   - See all available commands and their usage
-
-4. **Tools Guide**:
-   - Type `get_usage_guide tools` for tools documentation
-   - Learn about tool categories and usage
-
-### Tool System
-
-Carbon Commander features a powerful tool system:
-
-1. **Local Tools**:
+2. **Local Tools**:
    - Built-in functionality
    - No external dependencies
    - Fast execution
    - Click the ⚡ icon to view all tools
 
-2. **MCP Tools**:
-   > ⚠️ **WARNING: MCP Integration is currently UNTESTED**  
-   > The MCP (Model Context Protocol) integration is a work in progress and has not been thoroughly tested.
-   > Use with caution and expect potential issues until testing is complete.
+3. **MCP Tools**:
+   > ⚠️ **NOTE: MCP Integration Status**  
+   > The MCP (Model Context Protocol) integration has been significantly improved but should still be used with appropriate caution and still remains largely untested.
    
    - External service integration
    - Additional capabilities
@@ -177,15 +139,14 @@ Carbon Commander features a powerful tool system:
 ### Smart Features
 
 1. **Autocomplete**:
+   - Host-specific command history
    - Context-aware suggestions
-   - Tab completion
-   - Smart command matching
-   - History-based suggestions
 
-2. **Command History**:
-   - Persistent across sessions
-   - Quick navigation with arrow keys
-   - Smart filtering and search
+2. **Secure Communication**:
+   - Encrypted key storage
+   - Signature verification for extension communication
+   - Authentication token management
+   - Secure initialization process
 
 3. **AI Integration**:
    - OpenAI for advanced processing
@@ -341,4 +302,8 @@ One key learning from this project was the importance of MCP (Model Context Prot
 
 ## License
 
-This project is licensed under the GNU Lesser General Public License v3.0 - see the [LICENSE](LICENSE) file for details. 
+This project is licensed under the GNU Lesser General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+This project is unique - it's built through pair programming with AI (specifically Claude + Cursor). I welcome contributions and encourage you to use AI assistants in your development process! Check out [CONTRIBUTING.md](CONTRIBUTING.md) for more details. 

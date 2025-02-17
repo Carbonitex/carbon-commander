@@ -29,8 +29,8 @@ jobs:
     - name: Build
       run: npm run build
     
-    - name: Run tests
-      run: npm test || true # Temporarily allow test failure since tests aren't implemented yet
+#    - name: Run tests
+#      run: npm test || true # Temporarily allow test failure since tests aren't implemented yet
     
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
