@@ -27,6 +27,7 @@ yarn-error.log*
 
 # Testing
 /coverage
+/tests/dist
 
 # Misc
 .DS_Store
