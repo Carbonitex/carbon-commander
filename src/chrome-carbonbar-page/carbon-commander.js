@@ -24,6 +24,7 @@ import { CarbonBarHelpTools } from '../tools/CarbonBarHelpTools.js';
 import { ccLogger, AICallerModels } from '../global.js';
 import settings from './settings.js';
 import styles from './carbon-commander.css';
+import { Autocomplete } from './autocomplete.js';
 
 ccLogger.setPrefix('[CARBONBAR]');
 
@@ -50,13 +51,6 @@ class CarbonCommander {
       this.messageKeyStates = new Map(); // Track message keys
       this.activeMessagePorts = new Map(); // Track active message ports
       this.pendingSecureMessages = new Set(); // Track message IDs we've sent
-
-      // Autocomplete properties
-      this.lastAutocompleteRequest = null;
-      this.autocompleteDebounceTimer = null;
-      this.autocompleteDelay = 300; // Increased from 150ms to 300ms for better performance
-      this.lastAutocompleteInput = ''; // Add tracking for last input
-      this.minAutocompleteLength = 2; // Minimum characters before triggering autocomplete
 
       // Initialize HMAC key from script data attribute
       const script = document.querySelector('script[cc-data-key]');
@@ -111,8 +105,6 @@ class CarbonCommander {
       this.container = document.createElement('div');
       this.shadow.appendChild(this.container);
       
-
-      
       // Setup event listeners first
       this.setupEventListeners();
       
@@ -125,6 +117,11 @@ class CarbonCommander {
 
       // Initialize after event listeners are set up
       this.waitForAuthThenInitialize();
+
+      // Load command history after initialization
+      this.loadCommandHistory().catch(error => {
+        ccLogger.error('Error loading initial command history:', error);
+      });
     }
 
     async waitForAuthThenInitialize() {      
@@ -192,7 +189,8 @@ class CarbonCommander {
       this.input = this.container.querySelector('.cc-input');
       this.resultsContainer = this.container.querySelector('.cc-results');
       this.toolList = this.container.querySelector('.cc-tool-list');
-  
+
+
       // Add click handlers for provider badges
       const providerBadges = this.container.querySelectorAll('.cc-provider-badge');
       providerBadges.forEach(badge => {
@@ -274,11 +272,6 @@ class CarbonCommander {
         }
       });
 
-      // Add input event listener for autocomplete
-      this.input.addEventListener('input', (e) => {
-        this.handleInputChange(e);
-      });
-
       // Add click handler for settings icon
       const settingsIcon = this.container.querySelector('.cc-settings-icon');
       settingsIcon.addEventListener('click', () => this.showSettingsDialog());
@@ -288,6 +281,24 @@ class CarbonCommander {
 
       // Load command history
       this.loadCommandHistory();
+
+      // Initialize autocomplete
+      this.autocomplete = new Autocomplete(this.container, this.input, {
+        delay: 300,
+        minLength: 2
+      });
+    
+      // Set up autocomplete callbacks
+      this.autocomplete.setCommandHistoryGetter(() => this.commandHistory);
+      this.autocomplete.setToolsContextGetter(() => {
+        return this.toolCaller.getTools(true).map(tool => `${tool.description}`).join('\n');
+      });
+      this.autocomplete.onRequestAutocomplete = (context) => {
+        this.postMessage({
+          type: 'CB_GET_AUTOCOMPLETE',
+          payload: context
+        });
+      };
 
       setTimeout(() => {
         this.checkOllamaAvailability(1000, 10);
@@ -428,16 +439,23 @@ class CarbonCommander {
             );
         }
 
-        if (unprefixedType === 'COMMAND_HISTORY_LOADED') {
+        if (unprefixedType === 'COMMAND_HISTORY_RESPONSE') {
           this.commandHistory = event.data.payload || [];
           this.historyIndex = this.commandHistory.length;
         }
 
-        if (unprefixedType === 'AUTOCOMPLETE_SUGGESTION') {
-            const suggestion = event.data.payload;
+        if (unprefixedType === 'GET_AUTOCOMPLETE_RESPONSE') {
+            const suggestion = event.data.payload?.payload || event.data.payload;
             if (suggestion) {
                 ccLogger.debug('showAutocompleteSuggestion', suggestion);
-                this.showAutocompleteSuggestion(this.input.value.trim(), suggestion);
+                // Extract the input from the current input field
+                const currentInput = this.input.value.trim();
+                // Create the suggestion object in the format expected by showAutocompleteSuggestion
+                const formattedSuggestion = {
+                    requestId: this.autocomplete.currentAutocompleteRequestId,
+                    text: suggestion.payload || suggestion
+                };
+                this.showAutocompleteSuggestion(currentInput, formattedSuggestion);
             }
         }
 
@@ -1388,160 +1406,63 @@ Available tools are being limited. For more advanced features, recommend connect
 
     // Add new methods to handle command history persistence
     async loadCommandHistory() {
-
-      ccLogger.debug('loadCommandHistory: DISABLED ATM');
-      return;
-
       try {
-        this.postMessage({ type: "GET_COMMAND_HISTORY" });
+        this.postMessage({ 
+          type: "GET_COMMAND_HISTORY",
+          payload: {
+            encrypted: true,
+            hostname: window.location.hostname
+          }
+        });
       } catch (error) {
         ccLogger.error('Error loading command history:', error);
       }
     }
 
     async saveCommandHistory() {
-
-      ccLogger.debug('saveCommandHistory: DISABLED ATM');
-      return;
-
       try {
         this.postMessage({ 
           type: "SAVE_COMMAND_HISTORY", 
-          payload: this.commandHistory 
+          payload: {
+            history: this.commandHistory,
+            encrypted: true,
+            hostname: window.location.hostname
+          }
         });
       } catch (error) {
         ccLogger.error('Error saving command history:', error);
       }
     }
 
-    getAutocompleteContext(input) {
-      var context = '';
-      //build tools into context
-      //context += this.toolCaller.getTools(true).map(tool => `${tool.name} - ${tool.description}`).join('\n');
-      context += this.toolCaller.getTools(true).map(tool => `${tool.description}`).join('\n');
-
-      //build command history, last 10 commands
-      const commandHistory = this.commandHistory.slice(-10);
-
-      return {
-        input: input,
-        commandHistory: commandHistory,
-        context: context
-      }
-    }
-
-    async handleInputChange(e) {
-        const value = this.input.value.trim();
-        
-        // Get or create autocomplete element
-        let autocompleteEl = this.container.querySelector('.cc-autocomplete');
-        if (!autocompleteEl) {
-            autocompleteEl = document.createElement('div');
-            autocompleteEl.classList.add('cc-autocomplete');
-            const inputWrapper = this.container.querySelector('.cc-input-wrapper');
-            inputWrapper.appendChild(autocompleteEl);
-        }
-
-        // Clear suggestion if input is empty or too short
-        if (!value || value.length < this.minAutocompleteLength) {
-            autocompleteEl.innerHTML = '';
-            return;
-        }
-
-        // Don't trigger autocomplete if the input hasn't changed significantly
-        if (value === this.lastAutocompleteInput) {
-            return;
-        }
-
-        // Generate a unique request ID
-        const requestId = Date.now();
-        this.currentAutocompleteRequestId = requestId;
-
-        // Don't trigger autocomplete for very rapid typing
-        const now = Date.now();
-        if (this.lastAutocompleteRequest && (now - this.lastAutocompleteRequest) < 100) {
-            return;
-        }
-
-        this.newAutocompleteRequest(value, requestId);
-    }
-
-    newAutocompleteRequest(input, requestId) {
-
-      ccLogger.debug('newAutocompleteRequest CURRENT DISABLED', input, requestId);
-      return;
-
-
-        if (this.autocompleteDebounceTimer) {
-            clearTimeout(this.autocompleteDebounceTimer);
-            this.autocompleteDebounceTimer = null;
-        }
-
-        this.lastAutocompleteInput = input;
-        
-        this.autocompleteDebounceTimer = setTimeout(async () => {
-            try {
-                if (requestId === this.currentAutocompleteRequestId) {
-                    this.lastAutocompleteRequest = Date.now();
-                    this.postMessage({
-                        type: 'GET_AUTOCOMPLETE',
-                        payload: {
-                            ...this.getAutocompleteContext(input),
-                            requestId: requestId
-                        }
-                    });
-                }
-            } catch (error) {
-                ccLogger.error('Autocomplete error:', error);
-            }
-        }, this.autocompleteDelay);
-    }
-
     showAutocompleteSuggestion(input, suggestion) {
-        // Only show suggestion if it's from the current request
-        if (suggestion.requestId !== this.currentAutocompleteRequestId) {
-            return;
-        }
+      // If suggestion contains a nested array of suggestions, extract it
+      if (suggestion?.payload?.text && Array.isArray(suggestion.payload.text)) {
+        const suggestionsWithId = suggestion.payload.text.map(s => ({
+          text: s.text,
+          requestId: this.autocomplete.currentAutocompleteRequestId
+        }));
+        this.autocomplete.showSuggestion(input, suggestionsWithId);
+        return;
+      }
 
-        // Get existing or create new autocomplete element
-        let autocompleteEl = this.container.querySelector('.cc-autocomplete');
-        if (!autocompleteEl) {
-            autocompleteEl = document.createElement('div');
-            autocompleteEl.classList.add('cc-autocomplete');
-            const inputWrapper = this.container.querySelector('.cc-input-wrapper');
-            inputWrapper.appendChild(autocompleteEl);
-        }
+      // If suggestion is an array of text objects, pass it directly
+      if (Array.isArray(suggestion)) {
+        // Add the current requestId to the array of suggestions
+        const suggestionsWithId = suggestion.map(s => ({
+          text: s.text,
+          requestId: this.autocomplete.currentAutocompleteRequestId
+        }));
+        this.autocomplete.showSuggestion(input, suggestionsWithId);
+        return;
+      }
 
-        // Only show if we have a valid suggestion that extends the current input
-        if (suggestion.text && suggestion.text.toLowerCase().startsWith(input.toLowerCase()) && suggestion.text !== input) {
-            // Split suggestion to show input part and completion part separately
-            const inputPart = suggestion.text.substring(0, input.length);
-            const completionPart = suggestion.text.substring(input.length);
-
-            autocompleteEl.innerHTML = `
-                <span class="autocomplete-input">${inputPart}</span>
-                <span class="autocomplete-suggestion">${completionPart}</span>
-            `;
-
-            // Update tab key handler
-            const handleTab = (e) => {
-                if (e.key === 'Tab' && autocompleteEl.isConnected) {
-                    e.preventDefault();
-                    // Replace the entire input value with the suggestion
-                    this.input.value = suggestion.text;
-                    // Move cursor to end of input
-                    this.input.selectionStart = this.input.selectionEnd = this.input.value.length;
-                    // Clear suggestion after accepting it
-                    autocompleteEl.innerHTML = '';
-                }
-            };
-
-            // Remove any existing tab handler before adding new one
-            this.input.removeEventListener('keydown', handleTab);
-            this.input.addEventListener('keydown', handleTab);
-        } else {
-            autocompleteEl.innerHTML = '';
-        }
+      // If it's a single suggestion, convert it to our new format
+      if (suggestion && suggestion.text) {
+        this.autocomplete.showSuggestion(input, [{
+          text: suggestion.text,
+          requestId: suggestion.requestId || this.autocomplete.currentAutocompleteRequestId
+        }]);
+      }
     }
 
     async checkOllamaAvailability(interval = 1000, maxCount = -1) {

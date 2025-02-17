@@ -363,10 +363,22 @@ export class Settings {
             
             <div class="cc-settings-section">
                 <h3>Keyboard Shortcuts</h3>
-                <div class="cc-settings-field">
-                    <label>Command palette shortcut:</label>
-                    <div class="cc-keybind-display">${this.getKeybindDisplay()}</div>
-                    <button class="cc-button" id="change-keybind">Change Shortcut</button>
+                <div class="cc-settings-field-group">
+                    <div class="cc-settings-field">
+                        <label>Command palette shortcut:</label>
+                        <div class="cc-keybind-display">${this.getKeybindDisplay()}</div>
+                        <button class="cc-button" id="change-keybind">Change Shortcut</button>
+                    </div>
+
+                    <div class="cc-settings-field command-history-section">
+                        <label>Command History Management:</label>
+                        <div class="cc-command-history-list">
+                            <select id="hostname-select" class="cc-select">
+                                <option value="">Select hostname...</option>
+                            </select>
+                            <button class="cc-button" id="clear-history">Clear History</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -712,6 +724,50 @@ export class Settings {
                         }
                     }
                 }
+            }
+        });
+        
+        // Set up command history management
+        const hostnameSelect = dialog.querySelector('#hostname-select');
+        const clearHistoryBtn = dialog.querySelector('#clear-history');
+
+        // Function to load hostnames with command history
+        const loadHistoryHostnames = async () => {
+            const historyKeys = await this._postMessageHandler({
+                type: 'GET_HISTORY_HOSTNAMES'
+            });
+            
+            hostnameSelect.innerHTML = '<option value="">Select hostname...</option>';
+            if (historyKeys && historyKeys.payload) {
+                historyKeys.payload.forEach(hostname => {
+                    const option = document.createElement('option');
+                    option.value = hostname;
+                    option.textContent = hostname;
+                    hostnameSelect.appendChild(option);
+                });
+            }
+        };
+
+        loadHistoryHostnames();
+
+        clearHistoryBtn.addEventListener('click', async () => {
+            const selectedHostname = hostnameSelect.value;
+            if (!selectedHostname) {
+                alert('Please select a hostname first');
+                return;
+            }
+
+            if (confirm(`Are you sure you want to clear command history for ${selectedHostname}?`)) {
+                await this._postMessageHandler({
+                    type: 'CLEAR_COMMAND_HISTORY',
+                    payload: {
+                        hostname: selectedHostname
+                    }
+                });
+                
+                // Refresh the hostname list
+                await loadHistoryHostnames();
+                hostnameSelect.value = '';
             }
         });
         

@@ -211,7 +211,12 @@ async function getCarbonBarSettings() {
   const encryptedKeys = await CCLocalStorage.getEncryptedKeys();
   settings.encryptedKeys = new Map();
   for (const key of encryptedKeys) {
+    if(key.startsWith('carbonbar_command_history_')) {
+      continue;
+    }
     const encryptedValue = await CCLocalStorage.getEncrypted(key);
+    //ignore carbonbar_command_history_
+
     const hasValue = encryptedValue !== null && encryptedValue !== undefined && encryptedValue !== '';
     settings.encryptedKeys.set(key, hasValue);
     settings.keyValuePairs?.delete(key);
@@ -518,6 +523,8 @@ if (!window.carbonBarInjected && !inIframe) {
       } catch (error) {
         ccLogger.error('Error handling message1:', error);
       }
+    } else if(messageType.startsWith('CB_')) {
+      await handleMessage(event.data, messageType);
     } else {
       ccLogger.debug('Ignored non-CARBON message');
     }
@@ -633,16 +640,6 @@ async function handleMessage(message, unprefixedType) {
     //  });
     //  break;
 //
-    //case 'GET_COMMAND_HISTORY':
-    //  ccLogger.debug('Fetching command history');
-    //  const history = await CCLocalStorage.get('carbonbar_command_history');
-    //  window.postMessage({
-    //    type: 'COMMAND_HISTORY_LOADED',
-    //    payload: history || []
-    //  }, window.location.origin);
-    //  ccLogger.debug('Command history sent');
-    //  break;
-
     case 'GET_SETTINGS':
       ccLogger.debug('Fetching settings');
       const settings = await getCarbonBarSettings();
@@ -714,6 +711,73 @@ async function handleMessage(message, unprefixedType) {
         await handleMessage(message, 'GET_SETTINGS');
       } catch (error) {
         ccLogger.error('Error saving settings:', error);
+      }
+      break;
+
+    case 'GET_COMMAND_HISTORY':
+      ccLogger.debug('Fetching command history');
+      try {
+        const hostname = message.payload.hostname;
+        const history = await CCLocalStorage.getEncrypted(`carbonbar_command_history_${hostname}`);
+        window.postMessage({
+          type: 'CARBON_COMMAND_HISTORY_RESPONSE',
+          payload: history ? JSON.parse(history) : [],
+          _authToken: window.ccAuthToken
+        }, window.location.origin);
+        ccLogger.debug('Command history sent');
+      } catch (error) {
+        ccLogger.error('Error fetching command history:', error);
+        window.postMessage({
+          type: 'CARBON_COMMAND_HISTORY_RESPONSE',
+          payload: [],
+          _authToken: window.ccAuthToken
+        }, window.location.origin);
+      }
+      break;
+
+    case 'SAVE_COMMAND_HISTORY':
+      ccLogger.debug('Saving command history');
+      try {
+        const hostname = message.payload.hostname;
+        const historyToSave = JSON.stringify(message.payload.history);
+        await CCLocalStorage.setEncrypted(`carbonbar_command_history_${hostname}`, historyToSave);
+        ccLogger.debug('Command history saved');
+      } catch (error) {
+        ccLogger.error('Error saving command history:', error);
+      }
+      break;
+
+    case 'GET_HISTORY_HOSTNAMES':
+      ccLogger.debug('Fetching command history hostnames');
+      try {
+        const allKeys = await CCLocalStorage.getAllKeys();
+        const historyKeys = allKeys
+          .filter(key => key.startsWith('carbonbar_command_history_'))
+          .map(key => key.replace('carbonbar_command_history_', ''));
+        
+        window.postMessage({
+          type: 'CARBON_GET_HISTORY_HOSTNAMES_RESPONSE',
+          payload: historyKeys,
+          _authToken: window.ccAuthToken
+        }, window.location.origin);
+      } catch (error) {
+        ccLogger.error('Error fetching history hostnames:', error);
+        window.postMessage({
+          type: 'CARBON_GET_HISTORY_HOSTNAMES_RESPONSE',
+          payload: [],
+          _authToken: window.ccAuthToken
+        }, window.location.origin);
+      }
+      break;
+
+    case 'CLEAR_COMMAND_HISTORY':
+      ccLogger.debug('Clearing command history');
+      try {
+        const hostname = message.payload.hostname;
+        await CCLocalStorage.remove(`carbonbar_command_history_${hostname}`);
+        ccLogger.debug('Command history cleared');
+      } catch (error) {
+        ccLogger.error('Error clearing command history:', error);
       }
       break;
 

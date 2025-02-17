@@ -176,8 +176,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         return true;
     }
-    
-    if(!message.type || !message.type.startsWith('CARBON_')) {
+
+    if(!message.type || (!message.type.startsWith('CARBON_') && !message.type.startsWith('CB_'))) {
         ccLogMessage('Received non-CARBON message (BAD):', message);
         return;
     }
@@ -229,10 +229,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 
 
-    if (unprefixedType === 'GET_AUTOCOMPLETE') {
+    if (unprefixedType === 'CB_GET_AUTOCOMPLETE') {
         const { input, commandHistory, context } = message.payload;
         
-        AICaller.autocomplete(input, commandHistory, context)
+        AICaller.autocompleteSuggestions(input, commandHistory, context)
             .then(suggestion => {
                 sendResponse(suggestion);
             })

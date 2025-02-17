@@ -95,17 +95,22 @@ class AICaller {
         return provider === 'openai' ? this.openai : this.ollama;
     }
 
-    async autocomplete(commandBarInput, commandHistory, context) {
+    async autocompleteSuggestions(commandBarInput, commandHistory, context) {
         ccLogger.group('Generating Autocomplete');
-        let systemPrompt = ``;
+        let systemPrompt = `You are an AI that autocompletes commands in a command bar built to complete tasks for the user.`;
         systemPrompt += `Command history:\n${commandHistory.join('\n')}`;
         if(context && context.length > 0) {
             systemPrompt += `Context:\n${context}\n`;
         }
 
-        systemPrompt += `\n\nAutocomplete the user input based on the command history and context. Output only the suggested input as if you were autocompleting the user input.`;
+        systemPrompt += `\n\n
 
-        var addUserInputViaSystemPrompt = true;
+Respond with a JSON array of 3 possible responses to the
+query, each containing a string parameter called "text" that
+is about 5 words long
+`
+
+        var addUserInputViaSystemPrompt = false;
         if(addUserInputViaSystemPrompt) {
             systemPrompt += `\n\nUser input: ${commandBarInput}`;
         }
@@ -119,43 +124,100 @@ class AICaller {
         }
         
         const provider = this.ollama.isAvailable() ? 'ollama' : 'openai';
-        const [suggestion, details] = await this.chatCompletion(messages, null, AICallerModels['AUTOCOMPLETE'][provider], provider, null, null, 0.8);
+
+        if(provider == 'openai') {
+            //disabled for now
+            ccLogger.debug('Autocomplete disabled for OpenAI');
+            ccLogger.groupEnd();
+            return null;
+        }
+
+        
+
+        const [suggestion, details] = await this.chatCompletion(messages, null, AICallerModels['AUTOCOMPLETE'][provider], provider, null, null, 0.4);
         ccLogger.debug('Autocomplete result:', {
             input: commandBarInput,
             suggestion,
             provider
         });
 
-        // Modified logic to handle partial word matches
-        if (suggestion) {
-            const inputWords = commandBarInput.toLowerCase().split(' ');
-            const suggestionWords = suggestion.toLowerCase().split(' ');
-            
-            // Check if suggestion extends the last word or adds new words
-            if (inputWords.length <= suggestionWords.length) {
-                const lastInputWord = inputWords[inputWords.length - 1];
-                const lastSuggestionWord = suggestionWords[inputWords.length - 1];
-                
-                // Check if the last word is being completed or if new words are being added
-                if ((lastInputWord && lastSuggestionWord.startsWith(lastInputWord)) ||
-                    suggestionWords.length > inputWords.length) {
-                    const result = commandBarInput + suggestion.slice(commandBarInput.length);
-                    ccLogger.debug('Autocomplete match found:', result);
-                    ccLogger.groupEnd();
-                    return result;
-                }
-            } else {
-                //Add the suggestion as a new word
-                const newInput = inputWords.concat(suggestionWords).join(' ');
-                ccLogger.debug('Adding new word suggestion:', newInput);
+        try {
+            // Check if we have a valid suggestion
+            if (!suggestion || typeof suggestion !== 'string') {
+                ccLogger.error('Invalid suggestion received from AI');
                 ccLogger.groupEnd();
-                return newInput;
+                return [];
             }
+
+            // First try to parse as direct JSON (in case AI didn't use backticks)
+            try {
+                const directJson = JSON.parse(suggestion);
+                if (Array.isArray(directJson) && this.validateSuggestions(directJson)) {
+                    ccLogger.debug('Parsed direct JSON response');
+                    ccLogger.groupEnd();
+                    return directJson;
+                }
+            } catch (e) {
+                // Not direct JSON, continue to try backticks format
+                ccLogger.debug('Not direct JSON, trying backticks format');
+            }
+
+            // Look for content between backticks
+            const backtickMatch = suggestion.match(/\`\`\`([\S\s\W\w]*)\`\`\`/m);
+            if (!backtickMatch || !backtickMatch[1]) {
+                ccLogger.warn('No content found between backticks, attempting to format raw response');
+                // Try to salvage by converting the raw response into a suggestion
+                return this.formatFallbackSuggestion(suggestion);
+            }
+
+            let jsonString = backtickMatch[1];
+            
+            // Remove 'json' prefix if present
+            if (jsonString.startsWith('json')) {
+                jsonString = jsonString.substring(4);
+            }
+
+            // Try to parse the JSON
+            const json = JSON.parse(jsonString.trim());
+            
+            // Validate the structure
+            if (!Array.isArray(json)) {
+                ccLogger.warn('Response is not an array, converting to array format');
+                return this.formatFallbackSuggestion(JSON.stringify(json));
+            }
+
+            if (this.validateSuggestions(json)) {
+                ccLogger.debug('Successfully parsed and validated JSON response');
+                ccLogger.groupEnd();
+                return json;
+            } else {
+                ccLogger.warn('Invalid suggestion format, using fallback');
+                return this.formatFallbackSuggestion(jsonString);
+            }
+
+        } catch (error) {
+            ccLogger.error('Error processing autocomplete response:', error);
+            ccLogger.groupEnd();
+            return [];
         }
-        
-        ccLogger.debug('No suitable autocomplete suggestion found');
-        ccLogger.groupEnd();
-        return null;
+    }
+
+    validateSuggestions(suggestions) {
+        if (!Array.isArray(suggestions)) return false;
+        return suggestions.every(item => 
+            item && 
+            typeof item === 'object' && 
+            typeof item.text === 'string' &&
+            item.text.trim().length > 0
+        );
+    }
+
+    formatFallbackSuggestion(rawText) {
+        // Try to salvage the response by converting it to the expected format
+        const cleanText = rawText.replace(/["`]/g, '').trim();
+        return [{
+            text: cleanText.length > 50 ? cleanText.substring(0, 50) + '...' : cleanText
+        }];
     }
 
     async quickSummarize(string, prompt = "") {

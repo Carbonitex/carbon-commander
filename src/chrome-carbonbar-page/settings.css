@@ -259,4 +259,49 @@
 .cc-button:hover {
     background-color: rgba(0, 0, 0, 0.3);
     border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Command History Management */
+.command-history-section {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+.cc-settings-field-group {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+}
+
+.cc-settings-field-group .cc-settings-field {
+    flex: 1;
+}
+
+.cc-command-history-list {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.cc-select {
+    flex: 1;
+    padding: 6px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: white;
+    font-family: inherit;
+    font-size: 13px;
+}
+
+.cc-select:focus {
+    border-color: #79c1ff;
+    outline: none;
+}
+
+.cc-select option {
+    background-color: rebeccapurple;
+    color: white;
 } 
