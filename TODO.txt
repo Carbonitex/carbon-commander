@@ -14,3 +14,5 @@ IDEA: Tool suggestions while they are typing? Or maybe as a secondary prompt aft
 TODO: 'Esc' should close the topmost carbon window.
 - stop AI and TOOLS immediately if they are running, dont close window, glow it red.
 - broadcast the event so other files can handle it too.
+
+TODO: Hit space on empty chat should do a deep prompt to AI to give suggestions.

@@ -641,10 +641,26 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
         }
     };
 
-    static ManageAPIKey = {
+    static ListAllKeys = {
         function: {
-            name: 'manage_api_key',
-            description: 'Get or set API keys for various services. Use this to manage API keys for OpenAI and other services.',
+            name: 'list_all_keys',
+            description: 'List all keys in the key/value store'
+        },
+        execute: async function(scope, args) {
+            return {
+                success: true,
+                result: {
+                    keys: Array.from(scope.settings?.keyValuePairs?.keys()),
+                    encrypted_keys: Array.from(scope.settings?.encryptedKeys?.keys())
+                }
+            };
+        }
+    };
+
+    static ManageKeyValuePair = {
+        function: {
+            name: 'manage_key_value_pair',
+            description: 'Get or set key/value pairs for various services. Use this to manage API keys for OpenAI and other services.',
             parameters: {
                 properties: {
                     action: {
@@ -747,6 +763,339 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
                 success: false,
                 error: `Invalid action: ${action}`
             };
+        }
+    };
+
+    static PageInteract = {
+        function: {
+            name: 'page_interact',
+            description: 'Click elements or perform page interactions based on selectors or text content',
+            parameters: {
+                properties: {
+                    action: {
+                        type: 'string',
+                        description: 'The action to perform (click, hover, focus)',
+                        enum: ['click', 'hover', 'focus']
+                    },
+                    selector: {
+                        type: 'string',
+                        description: 'CSS selector to find the element'
+                    },
+                    text_content: {
+                        type: 'string',
+                        description: 'Text content to match (alternative to selector)'
+                    },
+                    wait_for_navigation: {
+                        type: 'boolean',
+                        description: 'Whether to wait for page navigation after the action',
+                        default: false
+                    },
+                    timeout: {
+                        type: 'number',
+                        description: 'Timeout in milliseconds for waiting',
+                        default: 5000
+                    }
+                },
+                required: ['action']
+            }
+        },
+        execute: async function(scope, args) {
+            const { action, selector, text_content, wait_for_navigation = false, timeout = 5000 } = args;
+            
+            try {
+                let element = null;
+                
+                // Find element by selector or text content
+                if (selector) {
+                    element = document.querySelector(selector);
+                } else if (text_content) {
+                    // Find elements containing the text
+                    const elements = Array.from(document.querySelectorAll('*'));
+                    element = elements.find(el => 
+                        el.textContent?.trim() === text_content.trim() ||
+                        el.value === text_content ||
+                        el.placeholder === text_content
+                    );
+                }
+
+                if (!element) {
+                    return {
+                        success: false,
+                        error: `Element not found: ${selector || text_content}`
+                    };
+                }
+
+                // Scroll element into view
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                // Create a promise for navigation if needed
+                let navigationPromise = null;
+                if (wait_for_navigation) {
+                    navigationPromise = new Promise((resolve, reject) => {
+                        const timeoutId = setTimeout(() => reject(new Error('Navigation timeout')), timeout);
+                        window.addEventListener('load', () => {
+                            clearTimeout(timeoutId);
+                            resolve();
+                        }, { once: true });
+                    });
+                }
+
+                // Perform the requested action
+                switch (action) {
+                    case 'click':
+                        element.click();
+                        break;
+                    case 'hover':
+                        element.dispatchEvent(new MouseEvent('mouseover', {
+                            view: window,
+                            bubbles: true,
+                            cancelable: true
+                        }));
+                        break;
+                    case 'focus':
+                        element.focus();
+                        break;
+                }
+
+                // Wait for navigation if requested
+                if (wait_for_navigation) {
+                    await navigationPromise;
+                }
+
+                return {
+                    success: true,
+                    result: {
+                        action,
+                        element: {
+                            tagName: element.tagName,
+                            id: element.id,
+                            className: element.className,
+                            text: element.textContent?.trim()
+                        }
+                    }
+                };
+            } catch (error) {
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        }
+    };
+
+    static InputText = {
+        function: {
+            name: 'input_text',
+            description: 'Enter text into form fields or contenteditable elements',
+            parameters: {
+                properties: {
+                    selector: {
+                        type: 'string',
+                        description: 'CSS selector to find the input element'
+                    },
+                    placeholder_text: {
+                        type: 'string',
+                        description: 'Placeholder text to match the input field'
+                    },
+                    text: {
+                        type: 'string',
+                        description: 'Text to enter into the field'
+                    },
+                    submit: {
+                        type: 'boolean',
+                        description: 'Whether to submit the form after entering text',
+                        default: false
+                    },
+                    clear_first: {
+                        type: 'boolean',
+                        description: 'Whether to clear the field before entering text',
+                        default: true
+                    }
+                },
+                required: ['text']
+            }
+        },
+        execute: async function(scope, args) {
+            const { selector, placeholder_text, text, submit = false, clear_first = true } = args;
+            
+            try {
+                let element = null;
+
+                // Find element by selector or placeholder
+                if (selector) {
+                    element = document.querySelector(selector);
+                } else if (placeholder_text) {
+                    element = Array.from(document.querySelectorAll('input, textarea')).find(el => 
+                        el.placeholder === placeholder_text
+                    );
+                }
+
+                if (!element) {
+                    return {
+                        success: false,
+                        error: `Input element not found: ${selector || placeholder_text}`
+                    };
+                }
+
+                // Scroll element into view
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                // Focus the element
+                element.focus();
+
+                // Clear the field if requested
+                if (clear_first) {
+                    if (element.isContentEditable) {
+                        element.textContent = '';
+                    } else {
+                        element.value = '';
+                    }
+                }
+
+                // Type the text
+                if (element.isContentEditable) {
+                    element.textContent = text;
+                } else {
+                    element.value = text;
+                }
+
+                // Dispatch input and change events
+                element.dispatchEvent(new Event('input', { bubbles: true }));
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+
+                // Submit the form if requested
+                if (submit && element.form) {
+                    element.form.submit();
+                }
+
+                return {
+                    success: true,
+                    result: {
+                        element: {
+                            tagName: element.tagName,
+                            id: element.id,
+                            className: element.className,
+                            value: element.value || element.textContent
+                        },
+                        text_entered: text
+                    }
+                };
+            } catch (error) {
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        }
+    };
+
+    static NavigateTo = {
+        function: {
+            name: 'navigate_to',
+            description: 'Navigate the current page to a target URL with various options',
+            parameters: {
+                properties: {
+                    url: {
+                        type: 'string',
+                        description: 'The target URL to navigate to. Can be absolute or relative.'
+                    },
+                    wait_for_load: {
+                        type: 'boolean',
+                        description: 'Whether to wait for the page to fully load',
+                        default: true
+                    },
+                    timeout: {
+                        type: 'number',
+                        description: 'Timeout in milliseconds for waiting',
+                        default: 30000
+                    },
+                    preserve_hash: {
+                        type: 'boolean',
+                        description: 'Whether to preserve the current URL hash/fragment',
+                        default: false
+                    },
+                    replace_state: {
+                        type: 'boolean',
+                        description: 'Whether to replace the current history entry instead of adding a new one',
+                        default: false
+                    }
+                },
+                required: ['url']
+            }
+        },
+        execute: async function(scope, args) {
+            const { url, wait_for_load = true, timeout = 30000, preserve_hash = false, replace_state = false } = args;
+            
+            try {
+                // Validate URL
+                let targetUrl;
+                try {
+                    // Check if it's a relative URL
+                    if (url.startsWith('/') || !url.includes('://')) {
+                        targetUrl = new URL(url, window.location.origin);
+                    } else {
+                        targetUrl = new URL(url);
+                    }
+                } catch (error) {
+                    return {
+                        success: false,
+                        error: `Invalid URL: ${error.message}`
+                    };
+                }
+
+                // Security check - only allow HTTP/HTTPS protocols
+                if (!['http:', 'https:'].includes(targetUrl.protocol)) {
+                    return {
+                        success: false,
+                        error: `Invalid protocol: ${targetUrl.protocol}`
+                    };
+                }
+
+                // Preserve hash if requested
+                if (preserve_hash && window.location.hash && !url.includes('#')) {
+                    targetUrl.hash = window.location.hash;
+                }
+
+                // Create a promise to wait for page load if requested
+                let loadPromise = null;
+                if (wait_for_load) {
+                    loadPromise = new Promise((resolve, reject) => {
+                        const timeoutId = setTimeout(() => reject(new Error('Navigation timeout')), timeout);
+                        
+                        window.addEventListener('load', () => {
+                            clearTimeout(timeoutId);
+                            resolve();
+                        }, { once: true });
+                    });
+                }
+
+                // Perform the navigation
+                const startTime = Date.now();
+                if (replace_state) {
+                    window.location.replace(targetUrl.href);
+                } else {
+                    window.location.href = targetUrl.href;
+                }
+
+                // Wait for load if requested
+                if (wait_for_load) {
+                    await loadPromise;
+                }
+
+                return {
+                    success: true,
+                    result: {
+                        url: targetUrl.href,
+                        navigationTime: Date.now() - startTime,
+                        previousUrl: document.referrer
+                    }
+                };
+            } catch (error) {
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
         }
     };
 }

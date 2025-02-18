@@ -83,7 +83,7 @@ class CarbonCommander {
           all: initial;
           display: none;
           position: fixed;
-          top: 20%;
+          top: 7%;
           left: 50%;
           transform: translateX(-50%);
           width: 600px;
@@ -334,6 +334,21 @@ class CarbonCommander {
           }
         }
       });
+
+      // Add navigation event listeners
+      window.addEventListener('popstate', () => this.handlePageNavigation());
+      window.addEventListener('pushstate', () => this.handlePageNavigation());
+      window.addEventListener('replacestate', () => this.handlePageNavigation());
+
+      // Monitor URL changes using MutationObserver
+      const observer = new MutationObserver((mutations) => {
+        if (this.lastUrl !== window.location.href) {
+          this.lastUrl = window.location.href;
+          this.handlePageNavigation();
+        }
+      });
+      observer.observe(document, { subtree: true, childList: true });
+      this.lastUrl = window.location.href;
 
       // Add event listener for model download progress
       window.addEventListener('ollama-model-progress', (event) => {
@@ -626,6 +641,31 @@ class CarbonCommander {
         ccLogger.debug('[RCV]', event.data.type, event.data);
         tempMessageHandler(event, unprefixedType);
       });
+    }
+
+    async handlePageNavigation() {
+      ccLogger.debug('Page navigation detected');
+      
+      // Update window name/app title
+      this.currentApp = (await this.toolCaller.getToolScope(this))?.appName || `CarbonCommander [${window.location.hostname}]`;
+      this.updateTitle(this.currentApp);
+      
+      // Refresh tools
+      this.toolCaller.reset();
+      this.updateToolList();
+      
+      // If hostname changed, load new command history
+      const currentHostname = window.location.hostname;
+      if (this._lastHostname !== currentHostname) {
+        this._lastHostname = currentHostname;
+        await this.loadCommandHistory();
+      }
+      
+      // If visible, refresh system prompt
+      if (this.isVisible) {
+        this.messages = [];
+        await this.addSystemPrompt();
+      }
     }
 
     sendFakeAIResponse(content, delay = 500) {
@@ -1179,7 +1219,11 @@ Available tools are being limited. For more advanced features, recommend connect
     //TODO: Thumbs up/down or star/unstar for commands, or assistant responses
 
     updateTitle(title) {
-      this.container.querySelector('.cc-title').textContent = title;
+      try {
+        this.container.querySelector('.cc-title').textContent = title;
+      } catch (error) {
+        ccLogger.error('Error updating title:', error);
+      }
     }
 
     async show() {
@@ -1687,6 +1731,7 @@ Available tools are being limited. For more advanced features, recommend connect
 
     updateToolList() {
         const toolListContent = this.container.querySelector('.cc-tool-list-content');
+        const toolCountEl = this.container.querySelector('.cc-tool-count');
         const localTools = this.toolCaller.getTools(true);
         const mcpTools = Array.from(this.mcpToolCaller.mcpToolsets.values())
             .reduce((tools, toolset) => tools.concat(toolset.tools), []);
@@ -1704,7 +1749,13 @@ Available tools are being limited. For more advanced features, recommend connect
                 </div>
             ` : ''}
         `;
-        
+
+        // Update tool count
+        if(mcpTools.length > 0) {
+          toolCountEl.innerHTML = `${localTools.length}+<span class="cc-tool-count-mcp">${mcpTools.length}</span> tools`;
+        } else {
+          toolCountEl.innerHTML = `${localTools.length} tools`;
+        }
         toolListContent.innerHTML = toolsHtml;
     }
 
