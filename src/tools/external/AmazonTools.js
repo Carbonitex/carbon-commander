@@ -161,8 +161,9 @@ class AmazonTools {
         }
     };
 
+    //TODO: Fix GetPriceHistory
     static GetPriceHistory = {
-        function: {
+        DISABLEDfunction: {
             name: 'get_price_history',
             description: 'Get price history for the current product',
             parameters: {
@@ -209,6 +210,7 @@ class AmazonTools {
         }
     };
 
+    //TODO: Fix GetSellerInfo
     static GetSellerInfo = {
         function: {
             name: 'get_seller_info',

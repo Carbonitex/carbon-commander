@@ -115,6 +115,44 @@ class ToolCaller {
             }
         }
 
+        if(!scope.$http) {
+            scope.$http = {
+                get: async (url) => {
+                    const res = await fetch(url);
+                    const contentType = res.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        return { data: await res.json() };
+                    } else {
+                        return { data: await res.text() };
+                    }
+                },
+                post: async (url, data) => {
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        body: JSON.stringify(data)
+                    });
+                    const contentType = res.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        return { data: await res.json() };
+                    } else {
+                        return { data: await res.text() };
+                    }
+                },
+                put: async (url, data) => {
+                    const res = await fetch(url, {
+                        method: 'PUT',
+                        body: JSON.stringify(data)
+                    });
+                    const contentType = res.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        return { data: await res.json() };
+                    } else {
+                        return { data: await res.text() };
+                    }
+                }
+            }
+        }
+
         if(!scope.appName) {
             ccLogger.warn('No app name found in scope, using default');
             scope.appName = 'CarbonCommander [Unknown App (2)]';

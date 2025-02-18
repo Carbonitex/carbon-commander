@@ -2,6 +2,7 @@
  * Global logger implementation for Carbon Commander
  */
 let ccLoggerPrefix = '';
+let ccLoggerIgnorePrefixes = [];//['[CARBONBAR-SECURE]'];
 
 export const ccDefaultKeybind = {
     key: 'k',
@@ -33,11 +34,31 @@ export const ccLogger = {
     setPrefix: (prefix) => {
         ccLoggerPrefix = prefix;
         // Wrap console methods to include prefix
-        ccLogger.log = (...args) => console.log(ccLoggerPrefix, ...args);
-        ccLogger.info = (...args) => console.info(ccLoggerPrefix, ...args);
-        ccLogger.warn = (...args) => console.warn(ccLoggerPrefix, ...args);
-        ccLogger.error = (...args) => console.error(ccLoggerPrefix, ...args);
-        ccLogger.debug = (...args) => console.debug(ccLoggerPrefix, ...args);
+        ccLogger.log = (...args) => {
+            if (!ccLoggerIgnorePrefixes.some(prefix => args[0].startsWith(prefix))) {
+                console.log(ccLoggerPrefix, ...args);
+            }
+        };
+        ccLogger.info = (...args) => {
+            if (!ccLoggerIgnorePrefixes.some(prefix => args[0].startsWith(prefix))) {
+                console.info(ccLoggerPrefix, ...args);
+            }
+        };
+        ccLogger.warn = (...args) => {
+            if (!ccLoggerIgnorePrefixes.some(prefix => args[0].startsWith(prefix))) {
+                console.warn(ccLoggerPrefix, ...args);
+            }
+        };
+        ccLogger.error = (...args) => {
+            if (!ccLoggerIgnorePrefixes.some(prefix => args[0].startsWith(prefix))) {
+                console.error(ccLoggerPrefix, ...args);
+            }
+        };
+        ccLogger.debug = (...args) => {
+            if (!ccLoggerIgnorePrefixes.some(prefix => args[0].startsWith(prefix))) {
+                console.debug(ccLoggerPrefix, ...args);
+            }
+        };
     }
 };
 
