@@ -2,7 +2,7 @@ class SmarterTrackPortalTools {
     static name = "SmarterTrackPortalTools";
 
     static _CarbonBarPageLoadFilter = (window) => {
-        return window.location.hostname.includes('portal.smartertools.com');
+        return document.getElementsByTagName('html')[0]?.className.includes('smartertrack-portal');
     }
 
     static ReadCommunitySection = {

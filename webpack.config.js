@@ -1,5 +1,6 @@
 const path = require('path');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
 
 module.exports = {
   entry: {
@@ -13,12 +14,24 @@ module.exports = {
     path: path.resolve(__dirname, 'dist'),
     sourceMapFilename: '[name].js.map',
   },
-  mode: 'development',
-  //Dont do any minification or uglification or anything
+  mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
   optimization: {
-    minimize: false,
+    minimize: process.env.NODE_ENV === 'production',
+    minimizer: [
+      new TerserPlugin({
+        terserOptions: {
+          compress: {
+            drop_console: true,
+          },
+          format: {
+            comments: false,
+          },
+        },
+        extractComments: false,
+      }),
+    ],
   },
-  devtool: 'source-map',
+  devtool: process.env.NODE_ENV === 'production' ? false : 'source-map',
   devServer: {
     static: {
       directory: path.join(__dirname, 'dist'),

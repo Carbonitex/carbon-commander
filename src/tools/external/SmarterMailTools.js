@@ -1,4 +1,5 @@
 //TODO: Reduce size of SM content returns
+//TODO: Tool for marking folders as read
 
 class SmarterMailTools {
     static name = "SmarterMailTools";
@@ -69,6 +70,28 @@ class SmarterMailTools {
             if (userInfo.categories) {
               systemPrompt += `. User categories: ${userInfo.categories.map(category => category.name).join(', ')}`;
             }
+
+            try {
+                const coreMailService = scope.getService('coreDataMail');
+                await coreMailService.loadMailTree();
+                const folderList = await coreMailService.getFolderList();
+
+                //only print the top level folders
+                const topLevelFolders = folderList.filter(folder => folder.parentFolder == '');
+                
+                const folderNameBuilder = (folder) => {
+                    if(folder.parentFolder == '') {
+                        const sfStr = topLevelFolders.filter(f => f.parentFolder == folder.id).length > 0 ? ` (${topLevelFolders.filter(f => f.parentFolder == folder.id).length} subfolders)` : '';
+                        return `${folder.name}${sfStr}`;
+                    }
+                    return folder.name;
+                }
+
+                systemPrompt += `. User folders: ${topLevelFolders.map(folderNameBuilder).join(', ')}`;
+            } catch (error) {
+                scope.logError('Error getting folder list:', error);
+            }
+
           } catch (error) {
             scope.logError('Error getting user info:', error);
             systemPrompt += '. Unable to get user info.';
@@ -76,7 +99,6 @@ class SmarterMailTools {
 
         return systemPrompt;
     }
-
 
     static GetHelp = {
         function: {

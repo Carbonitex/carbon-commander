@@ -657,10 +657,10 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
         }
     };
 
-    static ManageKeyValuePair = {
+    static ManageKeyValue = {
         function: {
-            name: 'manage_key_value_pair',
-            description: 'Get or set key/value pairs for various services. Use this to manage API keys for OpenAI and other services.',
+            name: 'manage_key_value',
+            description: 'Get or set key/value pairs for various services. Use this to manage API keys for OpenAI and other any other kind of data.',
             parameters: {
                 properties: {
                     action: {
@@ -670,12 +670,11 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
                     },
                     key_name: {
                         type: 'string',
-                        description: 'The name of the API key to manage (e.g., "openai-key")',
-                        enum: ['openai-key']
+                        description: 'The name of the key to read or write (e.g. "openai-key")'
                     },
                     value: {
                         type: 'string',
-                        description: 'The API key value to set (only required for "set" action)'
+                        description: 'The value to set (only required for "set" action)'
                     },
                     reason: {
                         type: 'string',
@@ -692,16 +691,6 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
                 const is_encrypted = scope.settings?.encryptedKeys?.get(key_name);
                 let keyExists = is_encrypted || (scope.settings?.keyValuePairs?.has(key_name) && 
                                 scope.settings?.keyValuePairs?.get(key_name)?.length > 0);
-
-                scope.logMessage('ManageAPIKeyDEBUG: ' + JSON.stringify({
-                    scope,
-                    settings: scope.settings,
-                    is_encrypted,
-                    keyExists,
-                    key_name,
-                    value,
-                    reason
-                }));
                 
                 if(is_encrypted) {
                     const response = await scope.promptAccessRequest({
@@ -728,6 +717,8 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
                     });
 
                     value = await promise;
+                } else {
+                    value = scope.settings?.keyValuePairs?.get(key_name);
                 }
                 
                 return {

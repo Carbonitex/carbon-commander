@@ -6,10 +6,11 @@ export class Autocomplete {
         this.input = input;
         this.lastAutocompleteRequest = null;
         this.autocompleteDebounceTimer = null;
-        this.autocompleteDelay = options.delay || 300;
+        this.autocompleteDelay = options.delay || 180;
         this.lastAutocompleteInput = '';
         this.minAutocompleteLength = options.minLength || 2;
         this.currentAutocompleteRequestId = null;
+        this.pendingRequest = null;
         this.setupAutocomplete();
     }
 
@@ -107,6 +108,12 @@ export class Autocomplete {
     }
 
     newAutocompleteRequest(input, requestId) {
+        // Cancel any pending request
+        if (this.pendingRequest) {
+            this.pendingRequest.aborted = true;
+        }
+
+        // Clear any existing debounce timer
         if (this.autocompleteDebounceTimer) {
             clearTimeout(this.autocompleteDebounceTimer);
             this.autocompleteDebounceTimer = null;
@@ -114,9 +121,14 @@ export class Autocomplete {
 
         this.lastAutocompleteInput = input;
         
+        // Create a new pending request object
+        this.pendingRequest = { requestId, aborted: false };
+        const currentRequest = this.pendingRequest;
+
         this.autocompleteDebounceTimer = setTimeout(async () => {
             try {
-                if (requestId === this.currentAutocompleteRequestId) {
+                // Only proceed if this request hasn't been aborted and is still the current request
+                if (!currentRequest.aborted && requestId === this.currentAutocompleteRequestId) {
                     this.lastAutocompleteRequest = Date.now();
                     this.onRequestAutocomplete({
                         ...this.getAutocompleteContext(input),
@@ -125,6 +137,11 @@ export class Autocomplete {
                 }
             } catch (error) {
                 console.error('Autocomplete error:', error);
+            } finally {
+                // Clear the pending request if it's still this one
+                if (this.pendingRequest === currentRequest) {
+                    this.pendingRequest = null;
+                }
             }
         }, this.autocompleteDelay);
     }
@@ -142,19 +159,23 @@ export class Autocomplete {
         
         // For array suggestions, check the requestId of the first item
         if (Array.isArray(suggestion)) {
-            if (!suggestion.length || suggestion[0].requestId !== this.currentAutocompleteRequestId) {
-                ccLogger.debug('Skipping suggestions due to requestId mismatch:', {
+            if (!suggestion.length || suggestion[0].requestId !== this.currentAutocompleteRequestId || 
+                (this.pendingRequest && this.pendingRequest.aborted)) {
+                ccLogger.debug('Skipping suggestions due to requestId mismatch or aborted request:', {
                     current: this.currentAutocompleteRequestId,
-                    received: suggestion[0]?.requestId
+                    received: suggestion[0]?.requestId,
+                    aborted: this.pendingRequest?.aborted
                 });
                 return;
             }
 
             suggestion = suggestion[0].text;
-        } else if (suggestion.requestId !== this.currentAutocompleteRequestId) {
-            ccLogger.debug('Skipping suggestion due to requestId mismatch:', {
+        } else if (suggestion.requestId !== this.currentAutocompleteRequestId || 
+                   (this.pendingRequest && this.pendingRequest.aborted)) {
+            ccLogger.debug('Skipping suggestion due to requestId mismatch or aborted request:', {
                 current: this.currentAutocompleteRequestId,
-                received: suggestion.requestId
+                received: suggestion.requestId,
+                aborted: this.pendingRequest?.aborted
             });
             return;
         }
