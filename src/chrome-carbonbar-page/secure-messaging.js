@@ -6,7 +6,16 @@
 
 // This file will be injected before the main carbonbar script
 (function() {
-  const ccLogger = {
+  const ccLoggerEmpty = {
+    log: () => {},
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+    debug: () => {},
+    group: () => {},
+    groupEnd: () => {},
+  }
+  const ccLoggerFull = {
     log: console.log.bind(console, '[CARBONBAR-SECURE]'),
     info: console.info.bind(console, '[CARBONBAR-SECURE]'),
     warn: console.warn.bind(console, '[CARBONBAR-SECURE]'),
@@ -15,6 +24,8 @@
     group: console.group.bind(console, '[CARBONBAR-SECURE]'),
     groupEnd: console.groupEnd.bind(console, '[CARBONBAR-SECURE]'),
   }
+
+  const ccLogger = ccLoggerEmpty;
   const ccSecureMessaging = {
     hmacKey: null,
     messageCounter: 0,

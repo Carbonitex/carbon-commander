@@ -71,31 +71,57 @@ async function initializeStorage() {
 
     // Send all initial values to the window
     try {
-      try {
-        const openaiKey = await CCLocalStorage.getEncrypted('openai-key');
-        if (openaiKey) {
-          // Send message to check and set OpenAI key
-          chrome.runtime.sendMessage(
-            { type: 'CARBON_SET_OPENAI_KEY', payload: { key: openaiKey } },
-            (response) => {
-              if (response && response.success) {
-                window.postMessage({
-                  type: 'PROVIDER_STATUS_UPDATE',
-                  provider: 'openai',
-                  status: true
-                }, window.location.origin);
-              } else {
-                // If key validation fails, clean up settings
-                settings.encryptedKeys = settings.encryptedKeys?.filter(k => k !== 'openai-key') || [];
-                CCLocalStorage.removeEncrypted('openai-key');
-              }
-            }
-          );
-        }
-      } catch (error) {
-        ccLogger.error('Error checking OpenAI key:', error);
-      }
+    //  try {
+    //    const openaiKey = await CCLocalStorage.getEncrypted('openai-key');
+    //    if (openaiKey) {
+    //      // Send message to check and set OpenAI key
+    //      chrome.runtime.sendMessage(
+    //        { type: 'CARBON_SET_OPENAI_KEY', payload: { key: openaiKey } },
+    //        (response) => {
+    //          if (response && response.success) {
+    //            window.postMessage({
+    //              type: 'PROVIDER_STATUS_UPDATE',
+    //              provider: 'openai',
+    //              status: true
+    //            }, window.location.origin);
+    //          } else {
+    //            // If key validation fails, clean up settings
+    //            settings.encryptedKeys = settings.encryptedKeys?.filter(k => k !== 'openai-key') || [];
+    //            CCLocalStorage.removeEncrypted('openai-key');
+    //          }
+    //        }
+    //      );
+    //    }
+    //  } catch (error) {
+    //    ccLogger.error('Error checking OpenAI key:', error);
+    //  }
 
+
+    //try {
+    //    const geminiKey = await CCLocalStorage.getEncrypted('gemini-key');
+    //    if (geminiKey) {
+    //      // Send message to check and set Gemini key
+    //      chrome.runtime.sendMessage(
+    //        { type: 'CARBON_SET_GEMINI_KEY', payload: { key: geminiKey } },
+    //        (response) => {
+    //          if (response && response.success) {
+    //            window.postMessage({
+    //              type: 'PROVIDER_STATUS_UPDATE',
+    //              provider: 'gemini',
+    //              status: true
+    //            }, window.location.origin);
+    //          } else {
+    //            // If key validation fails, clean up settings
+    //            settings.encryptedKeys = settings.encryptedKeys?.filter(k => k !== 'gemini-key') || [];
+    //            CCLocalStorage.removeEncrypted('gemini-key');
+    //          }
+    //        }
+    //      );
+    //    }
+    //  } catch (error) {
+    //    ccLogger.error('Error checking Gemini key:', error);
+    //  }
+            
       window.postMessage({
         type: 'SET_KEYBIND',
         payload: keybind
@@ -377,24 +403,10 @@ if (!window.carbonBarInjected && !inIframe) {
       payload: event.data.payload
     });
 
-
-
     // Handle both prefixed and unprefixed message types for backward compatibility
     const messageType = event.data.type;
     const unprefixedType = messageType.replace(/^CARBON_/, '');
     ccLogger.debug('Processing message:', { original: messageType, unprefixed: unprefixedType });
-
-    // Special handling for one-way messages that don't need secure messaging or auth
-    //if (messageType === 'AI_RESPONSE_CHUNK' || 
-    //    messageType === 'AI_RESPONSE_ERROR' || 
-    //    messageType === 'SET_OPENAI_KEY' || 
-    //    messageType === 'CHECK_OLLAMA_AVAILABLE' || 
-    //    messageType === 'AI_EXECUTE_TOOL') {
-    //    ccLogger.debug('[SECURITYDEBUG] Handling one-way message type:', messageType);
-    //    await handleMessage(event.data, unprefixedType);
-    //    ccLogger.groupEnd();
-    //    return;
-    //}
 
     // Handle provider status updates directly without forwarding
     if (messageType === 'PROVIDER_STATUS_UPDATE') {
@@ -835,6 +847,12 @@ async function handleMessage(message, unprefixedType) {
                     window.postMessage({
                       type: 'PROVIDER_STATUS_UPDATE',
                       provider: 'openai',
+                      status: defaultResponse.available
+                    }, window.location.origin);
+                  } else if (unprefixedType === 'CHECK_GEMINI_AVAILABLE') {
+                    window.postMessage({
+                      type: 'PROVIDER_STATUS_UPDATE',
+                      provider: 'gemini',
                       status: defaultResponse.available
                     }, window.location.origin);
                   }

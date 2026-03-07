@@ -42,9 +42,11 @@ export class Settings {
                     for (const [key, value] of settings.encryptedKeys) {
                         this.encryptedKeys.set(key, value);
                     }
-                    // Ensure openai-key is always encrypted and exists, mark as empty by default
+                    // Ensure openai-key and gemini-key are always encrypted and exists, mark as empty by default
                     if (!this.encryptedKeys.has('openai-key'))
                         this.encryptedKeys.set('openai-key', false);
+                    if (!this.encryptedKeys.has('gemini-key'))
+                        this.encryptedKeys.set('gemini-key', false);
                 }
             }
         }
@@ -92,6 +94,25 @@ export class Settings {
         return response;
     }
 
+    async testGeminiKey(key) {
+        const response = await new Promise(resolve => {
+            window.postMessage({
+                type: 'CARBON_SET_GEMINI_KEY',
+                payload: { key: key, test: true }
+            }, window.location.origin);
+
+            const listener = (event) => {
+                if (event.data.type === 'SET_GEMINI_KEY_RESPONSE') {
+                    window.removeEventListener('message', listener);
+                    resolve(event.data.payload);
+                }
+            };
+            window.addEventListener('message', listener);
+        });
+        return response;
+    }
+
+
     async save() {
         if (!this._postMessageHandler) {
             ccLogger.error('Settings: postMessage handler not initialized');
@@ -128,6 +149,14 @@ export class Settings {
                                 ccLogger.debug('Setting OpenAI key:', value);
                                 window.postMessage({
                                     type: 'CARBON_SET_OPENAI_KEY',
+                                    payload: { key: value, save: true }
+                                }, window.location.origin);
+                            }
+
+                            if(key === 'gemini-key') {
+                                ccLogger.debug('Setting Gemini key:', value);
+                                window.postMessage({
+                                    type: 'CARBON_SET_GEMINI_KEY',
                                     payload: { key: value, save: true }
                                 }, window.location.origin);
                             }
@@ -632,6 +661,15 @@ export class Settings {
                         }
                     }
 
+                    if(key === 'gemini-key') {
+                        const response = await this.testGeminiKey(newValue);
+                        if(!response.success) {
+                            alert('Invalid Gemini key, test failed');
+                            ccLogger.error('Failed to set Gemini key');
+                            return;
+                        }
+                    }
+
                     this.encryptedKeys.set(key, true);
                     this.keyValuePairs.set(key, newValue);
                     //Update the UI with encrypted 'hasValue' status, for kv-value row
@@ -823,6 +861,15 @@ export class Settings {
                                         }
                                     }
 
+                                    if(key === 'gemini-key') {
+                                        const response = await this.testGeminiKey(trimmedValue);
+                                        if(!response.success) {
+                                            alert('Invalid Gemini key, test failed');
+                                            ccLogger.error('Failed to set Gemini key');
+                                            return;
+                                        }
+                                    }
+                                    
                                     newPairs.set(key, trimmedValue);
                                     // Check if this should be encrypted
                                     if (encryptToggle && encryptToggle.checked)

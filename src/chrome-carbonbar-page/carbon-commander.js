@@ -51,6 +51,10 @@ class CarbonCommander {
       this.messageKeyStates = new Map(); // Track message keys
       this.activeMessagePorts = new Map(); // Track active message ports
       this.pendingSecureMessages = new Set(); // Track message IDs we've sent
+      // Add properties to store original event handlers
+      this.originalEventHandlers = new Map();
+      this.capturedEvents = new Set(['keydown', 'keyup', 'keypress']);
+      this.doc = doc;
 
       // Initialize HMAC key from script data attribute
       const script = doc.querySelector('script[cc-data-key]');
@@ -166,6 +170,7 @@ class CarbonCommander {
             <div class="cc-status-badges">
               <div class="cc-provider-badge" data-provider="ollama" title="Click to toggle">Ollama</div>
               <div class="cc-provider-badge" data-provider="openai" title="Click to toggle">OpenAI</div>
+              <div class="cc-provider-badge" data-provider="gemini" title="Click to toggle">Gemini</div>
               <div class="cc-mcp-badges"></div>
               <div class="cc-tool-count"></div>
             </div>
@@ -291,7 +296,8 @@ class CarbonCommander {
       // Set up autocomplete callbacks
       this.autocomplete.setCommandHistoryGetter(() => this.commandHistory);
       this.autocomplete.setToolsContextGetter(() => {
-        return this.toolCaller.getTools(true).map(tool => `${tool.description}`).join('\n');
+        const tools = this.toolCaller.getTools(true);
+        return `Tools: ${tools.map(tool => `${tool.name}`).join(', ')}`;
       });
       this.autocomplete.onRequestAutocomplete = (context) => {
         this.postMessage({
@@ -310,6 +316,14 @@ class CarbonCommander {
         payload: {
           noAIMode: this.hasNoAIMode
         }
+      });
+
+      ccLogger.debug('Checking Gemini availability', { noAIMode: this.hasNoAIMode });
+      this.postMessage({
+          type: "CHECK_GEMINI_AVAILABLE",
+          payload: {
+              noAIMode: this.hasNoAIMode
+          }
       });
 
       // Add MCP status tracking
@@ -481,12 +495,16 @@ class CarbonCommander {
           if(event.data.provider == 'openai' && event.data.status){
             this.connectedProviders.add('openai');
           }
+
+          if(event.data.provider == 'gemini' && event.data.status){
+            this.connectedProviders.add('gemini');
+          }
         
-          if(this.hasNoAIMode && this.connectedProviders.has('openai') && this.connectedProviders.has('ollama')){
+          if(this.hasNoAIMode && (this.connectedProviders.has('openai') || this.connectedProviders.has('gemini')) && this.connectedProviders.has('ollama')){
             this.hasNoAIMode = false;
             this.currentApp = await this.toolCaller.getToolScope(this).appName;
             this.updateTitle(this.currentApp);
-            this.sendFakeAIResponse("🎉 All AI providers connected! You can now use all features.", 500);
+            this.sendFakeAIResponse("🎉 AI providers connected! You can now use all features.", 500);
             this.sendFakeAIResponse("Go ahead and hit ESC or Ctrl+K to close and reopen the command bar to enter normal mode.", 1000);
           }
         
@@ -501,10 +519,21 @@ class CarbonCommander {
               //this.sendFakeAIResponse("🎉 AI provider connected! You can now use all features.", 500);
             
               // If connectedProviders does not contain openai, we need to prompt the user to connect it
-              if (event.data.provider == 'ollama' && !this.connectedProviders.has('openai')) {
-                this.sendFakeAIResponse("💡 **Tip:** While Ollama provides local AI capabilities, adding OpenAI can greatly enhance functionality with more advanced models like GPT-4.\n\nTo connect OpenAI:\n1. Get an API key from [OpenAI's platform](https://platform.openai.com/api-keys)\n2. Use the command: `set openai-key YOUR_API_KEY`", 1000);
-              } else if (event.data.provider == 'openai' && !this.connectedProviders.has('ollama')) {
-                this.sendFakeAIResponse("💡 **Tip:** While OpenAI provides great capabilities, adding Ollama allows the command bar to run some prompts locally like autocomplete, summarization, and suggestions.", 1000);
+              if (event.data.provider == 'ollama' && (!this.connectedProviders.has('openai') || !this.connectedProviders.has('gemini'))) {
+                this.sendFakeAIResponse(`💡 **Tip:** While Ollama provides local AI capabilities, 
+adding OpenAI or Gemini can greatly enhance functionality with more advanced models like GPT-4 or Gemini Pro.
+
+To connect OpenAI:
+1. Get an API key from [OpenAI's platform](https://platform.openai.com/api-keys)
+2. Use the command: 'set openai-key YOUR_API_KEY'
+
+To connect Gemini:
+1. Get an API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Use the command: 'set gemini-key YOUR_API_KEY'
+`, 1000);
+              } else if ((event.data.provider == 'openai' || event.data.provider == 'gemini') && !this.connectedProviders.has('ollama')) {
+                this.sendFakeAIResponse(`💡 **Tip:** While Gemini/OpenAI provides great capabilities, 
+adding Ollama allows the command bar to run some prompts locally like autocomplete, summarization, and suggestions.`, 1000);
               }
             }
           }
@@ -794,6 +823,17 @@ class CarbonCommander {
                 </div>
 
                 <div class="provider-section">
+                    <h4>Gemini</h4>
+                    <p>Google's powerful AI models accessible via API key.</p>
+                    <ul>
+                        <li>Get an API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a></li>
+                        <li>Use the command: <code>set gemini-key YOUR_API_KEY</code></li>
+                        ${this.connectedProviders.has('gemini') ? 
+                            '<li>Or disconnect: <code>disconnect gemini</code></li>' : ''}
+                    </ul>
+                </div>
+
+                <div class="provider-section">
                     <h4>Ollama</h4>
                     <p>A local AI solution that runs on your machine.</p>
                     <ul>
@@ -808,6 +848,7 @@ class CarbonCommander {
                     <p>Current Status:</p>
                     <ul>
                         <li>OpenAI: <span class="status-indicator">Not Connected</span></li>
+                        <li>Gemini: <span class="status-indicator">Not Connected</span></li>
                         <li>Ollama: <span class="status-indicator">Not Connected</span></li>
                     </ul>
                 </div>
@@ -865,7 +906,7 @@ class CarbonCommander {
         const chunk = payload.content;
         ccLogger.debug('AI_CHUNK_RESPONSE2', payload.error, message.type, chunk);
         this.accumulatedChunks += chunk;
-        const htmlContent = marked.parse(this.accumulatedChunks);
+        let htmlContent = marked.parse(this.accumulatedChunks);
         const resultContainer = this.getCurrentResultContainer();
         ccLogger.debug('AI_CHUNK_RESPONSE3', resultContainer);
         let aiOutput = resultContainer.querySelector('.cc-ai-output');
@@ -959,6 +1000,29 @@ class CarbonCommander {
         this.input.value = '';
         this.input.disabled = false;
         this.input.focus();
+
+
+        const resultContainer = this.getCurrentResultContainer();
+        ccLogger.debug('imageUrls1', resultContainer);
+        let aiOutput = resultContainer.querySelector('.cc-ai-output');
+
+        let htmlContent = aiOutput.innerHTML;
+        const imageUrls = htmlContent.match(/"(.*)image_(.*)\.png"/g);
+        console.log('imageUrls2', imageUrls);
+        if(imageUrls && imageUrls.length > 0) {
+          imageUrls.forEach(imageUrl => {
+            const requestId = imageUrl.match(/"(.*)image_(.*)\.png"/)[2];
+            window.cbImages.forEach(image => {
+              console.log('imageUrlsMatch', image.requestId, requestId);
+              if(image.requestId == requestId) {
+                htmlContent = htmlContent.replace(imageUrl, `"${image.data}"`);
+              }
+            });
+          });
+        }
+        aiOutput.innerHTML = htmlContent;
+
+
       }
 
       if (payload.messages && !payload.error) {
@@ -1052,6 +1116,46 @@ Available tools are being limited. For more advanced features, recommend connect
       });
     }
 
+    async noAIModeGeminiInputRespond(){
+      var msgs = [];
+      let newSystemPrompt = `You are a helpful AI assistant integrated into a smart command bar. You are currently in low-AI mode using Gemini's cloud-based models.
+
+Key capabilities:
+- Answering questions about the application and its features
+- Providing help and guidance on using available tools
+- Explaining concepts and offering suggestions
+- Processing natural language commands into tool actions
+
+Guidelines:
+- Keep responses clear and concise
+- When suggesting tools, explain their purpose
+- If you can't help with something, explain why and suggest alternatives
+- Format responses using markdown for better readability
+
+Available tools are being limited. For more advanced features, recommend connecting to Ollama and OpenAI. If you can't fulfill a request remind them that they are running in a low-AI mode and that they can connect to Ollama and OpenAI for more advanced features. Or that they may refresh the page to enter normal mode.`;
+
+      msgs.push({
+        role: 'system',
+        content: newSystemPrompt
+      });
+
+      msgs.push(this.messages[this.messages.length - 1]);
+
+      var request = {
+        messages: msgs,
+        model: 'gemini-1.5-flash-latest',
+        tools: CarbonBarHelpTools.GetNoAIModeToolInfo(),
+        temp: 0.5,
+        keepAlive: '30m',
+        provider: 'gemini'
+      };
+
+      this.postMessage({ 
+        type: "AI_REQUEST", 
+        payload: request
+      });
+    }
+
     async noAIModeInputHandler(messages) {
       const userMessage = messages[messages.length - 1];
       const userInput = userMessage.content;
@@ -1086,9 +1190,40 @@ Available tools are being limited. For more advanced features, recommend connect
         return;
       }
 
+      // Check if it's a Gemini key setting command
+      if (userInput.toLowerCase().startsWith('set gemini-key ')) {
+          const key = userInput.substring(15).trim();
+          try {
+              // Assuming a SetGeminiKey tool exists similar to SetOpenAIKey
+              // Need to implement this tool in CarbonBarHelpTools.js
+              // const result = await CarbonBarHelpTools.SetGeminiKey.execute(await this.toolCaller.getToolScope(this), {key: key});
+              // if (result.success) {
+              //     this.sendFakeAIResponse('Gemini key set successfully');
+              // } else {
+              //     this.sendFakeAIResponse("Failed to set Gemini key. Please try again.");
+              // }
+
+              // For now, send message directly (requires handler in background script)
+              this.postMessage({
+                  type: "SET_GEMINI_KEY",
+                  payload: key
+              });
+              // Response should come back via PROVIDER_STATUS_UPDATE
+              this.sendFakeAIResponse('Attempting to set Gemini key...');
+
+          } catch (error) {
+              ccLogger.error('Error trying to set Gemini key:', error);
+              this.sendFakeAIResponse("Failed to set Gemini key. Please check the console.");
+          }
+          return;
+      }
+
       //if ollama is connected we can prompt it
       if (this.connectedProviders.has('openai')) {
         this.noAIModeOpenAIInputRespond();
+        return;
+      } else if (this.connectedProviders.has('gemini')) {
+        this.noAIModeGeminiInputRespond();
         return;
       } else if(this.connectedProviders.has('ollama')) {
         this.noAIModeOllamaInputRespond();
@@ -1133,6 +1268,14 @@ Available tools are being limited. For more advanced features, recommend connect
         ccLogger.groupEnd();
         return;
       }
+
+      if (value.toLowerCase() === 'disconnect gemini') {
+        ccLogger.info('Disconnecting Gemini');
+        this.sendFakeAIResponse("Gemini disconnected successfully");
+        ccLogger.groupEnd();
+        return;
+      }
+      
 
       const container = this.container.querySelector('.cc-container');
       
@@ -1242,6 +1385,10 @@ Available tools are being limited. For more advanced features, recommend connect
       
       this.root.classList.add('visible');
       this.isVisible = true;
+
+      // Capture and override event handlers
+      this.captureEventHandlers();
+      
       this.input.focus();
     }
   
@@ -1250,6 +1397,10 @@ Available tools are being limited. For more advanced features, recommend connect
       container.classList.remove('waiting-input', 'processing', 'has-error', 'tool-running', 'success', 'rainbow');
       this.root.classList.remove('visible');
       this.isVisible = false;
+
+      // Restore original event handlers
+      this.restoreEventHandlers();
+
       let resultsContainer = document.querySelector('.cc-results');
       if(resultsContainer) {
         resultsContainer.style.display = 'none';
@@ -1563,6 +1714,22 @@ Available tools are being limited. For more advanced features, recommend connect
           badge.removeAttribute('data-status');
           this.connectedProviders.delete(provider);
         }
+      } else if (provider === 'gemini') {
+        const badge = this.container.querySelector(`.cc-provider-badge[data-provider="gemini"]`);
+        if (badge) {
+          if (isConnected) {
+            // Check if the provider is temporarily disabled
+            if (this.disabledProviders && this.disabledProviders.has(provider)) {
+              badge.setAttribute('data-status', 'disabled');
+            } else {
+              badge.setAttribute('data-status', 'connected');
+            }
+            this.connectedProviders.add(provider);
+          } else {
+            badge.removeAttribute('data-status');
+            this.connectedProviders.delete(provider);
+          }
+        }
       } else {
         // Handle regular provider badges
         const badge = this.container.querySelector(`.cc-provider-badge[data-provider="${provider}"]`);
@@ -1587,11 +1754,19 @@ Available tools are being limited. For more advanced features, recommend connect
         this.messages.push({
           role: 'system',
           content: `Call the set_openai_key tool to connect to OpenAI if the user provides a key.`
-        });
+        }); 
+      }
+
+      if(!this.addedGeminiReminder && this.connectedProviders.has('gemini') && !this.connectedProviders.has('ollama')) {
+        this.addedGeminiReminder = true;
+        this.messages.push({
+          role: 'system',
+          content: `Call the set_gemini_key tool to connect to Gemini if the user provides a key.`
+        }); 
       }
 
       // Update the status in the no-provider view if it exists
-      const statusList = document.querySelectorAll('.provider-status li');
+      const statusList = this.container.querySelectorAll('.provider-status li');
       const statusElement = Array.from(statusList).find(li => 
         li.textContent.toLowerCase().includes(provider.toLowerCase())
       );
@@ -1995,6 +2170,58 @@ Available tools are being limited. For more advanced features, recommend connect
         if (this.resultsContainer) {
             this.resultsContainer.scrollTop = this.resultsContainer.scrollHeight;
         }
+    }
+
+    captureEventHandlers() {
+      // Store original event handlers and set up capturing
+      this.capturedEvents.forEach(eventType => {
+        // Create a handler that will capture and handle events
+        const captureHandler = (event) => {
+          // Only capture events if they're not from our own elements
+          if (!this.root.contains(event.target)) {
+            event.stopPropagation();
+            event.preventDefault();
+            
+            // If it's our keybind combination, let it through
+            const matchesKeybind = 
+              event.key.toLowerCase() === this.keybind.key.toLowerCase() && 
+              (event.ctrlKey === this.keybind.ctrl) && 
+              (event.metaKey === this.keybind.meta);
+
+            if (matchesKeybind) {
+              return;
+            }
+          }
+        };
+
+        // Store the original handlers if we haven't already
+        if (!this.originalEventHandlers.has(eventType)) {
+          const existingHandlers = this.getEventListeners(this.doc, eventType);
+          this.originalEventHandlers.set(eventType, existingHandlers);
+        }
+
+        // Add our capture handler
+        this.doc.addEventListener(eventType, captureHandler, true);
+        // Store the capture handler so we can remove it later
+        this.originalEventHandlers.set(`${eventType}_capture`, captureHandler);
+      });
+    }
+
+    restoreEventHandlers() {
+      // Remove our capture handlers and restore original ones
+      this.capturedEvents.forEach(eventType => {
+        const captureHandler = this.originalEventHandlers.get(`${eventType}_capture`);
+        if (captureHandler) {
+          this.doc.removeEventListener(eventType, captureHandler, true);
+        }
+      });
+    }
+
+    getEventListeners(element, eventType) {
+      // This is a helper method to get event listeners
+      // Note: This is a simplified version since we can't actually get all listeners
+      // but we can store ones we know about
+      return element[`on${eventType}`] ? [element[`on${eventType}`]] : [];
     }
 }
 

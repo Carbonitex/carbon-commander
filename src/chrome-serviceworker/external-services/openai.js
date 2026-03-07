@@ -5,6 +5,7 @@ class OpenAIClient {
     static FAST_MODEL = "gpt-4o-mini";
     static REASON_MODEL = "o3-mini";
     static VISION_MODEL = "gpt-4-vision-preview";
+    static IMAGE_MODEL = "dall-e-3";
     static isAvailable = null;
 
     constructor() {
@@ -346,6 +347,17 @@ class OpenAIClient {
                             }
 
                             if (toolCall.function) {
+                                if(!currentToolCall) {
+                                    currentToolCall = {
+                                        id: toolCall.id,
+                                        index: toolCall.index,
+                                        function: {
+                                            name: '',
+                                            arguments: ''
+                                        }
+                                    };
+                                }
+
                                 if (toolCall.function.name) {
                                     currentToolCall.function.name = toolCall.function.name;
                                 }
@@ -399,6 +411,63 @@ class OpenAIClient {
         }
         ccLogger.groupEnd();
         return null;
+    }
+
+    async generateImage(prompt, size = '1024x1024', n = 1, model = null) {
+        ccLogger.group('OpenAI Image Generation');
+        model = model || OpenAIClient.IMAGE_MODEL;
+
+        model = 'dall-e-3';
+        
+        if (model === 'dall-e-3' && n > 1) {
+            ccLogger.warn('DALL-E 3 only supports n=1. Setting n=1.');
+            n = 1;
+        }
+        if (model === 'dall-e-3' && !['1024x1024', '1792x1024', '1024x1792'].includes(size)) {
+             ccLogger.warn(`DALL-E 3 only supports sizes 1024x1024, 1792x1024, 1024x1792. Defaulting to 1024x1024.`);
+             size = '1024x1024';
+        }
+
+        const request = {
+            model,
+            prompt,
+            n,
+            size,
+            response_format: 'b64_json'
+        };
+
+        ccLogger.debug('Image generation request:', {
+            model: request.model,
+            prompt: request.prompt.substring(0, 50) + '...',
+            n: request.n,
+            size: request.size
+        });
+
+        try {
+            const response = await fetch('https://api.openai.com/v1/images/generations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.apiKey}`
+                },
+                body: JSON.stringify(request)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                ccLogger.error('OpenAI Image API Error Response:', errorData);
+                throw new Error(`OpenAI API Error: ${errorData.error?.message || response.statusText}`);
+            }
+
+            const result = await response.json();
+            ccLogger.info(`Image generation successful. Received ${result.data?.length || 0} images.`);
+            ccLogger.groupEnd();
+            return result.data; 
+        } catch (error) {
+            ccLogger.error('OpenAI Image Generation Failed:', error);
+            ccLogger.groupEnd();
+            throw error;
+        }
     }
 }
 

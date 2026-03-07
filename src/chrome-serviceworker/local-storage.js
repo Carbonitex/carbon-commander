@@ -1,8 +1,18 @@
 class CCLocalStorage {
     // TODO: Make this a random key based on something from chrome thats unique to the extension
     static #pass = 'CarbonLocalSecurityKey';
-    
+
     static ccLogger = {
+        log: () => {},
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+        debug: () => {},
+        group: () => {},
+        groupEnd: () => {},
+    }
+    
+    static ccLoggerFull = {
         log: console.log.bind(console, '[CARBON-STORAGE]'),
         info: console.info.bind(console, '[CARBON-STORAGE]'),
         warn: console.warn.bind(console, '[CARBON-STORAGE]'),

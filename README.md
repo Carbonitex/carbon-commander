@@ -160,6 +160,9 @@ Carbon Commander now features a comprehensive settings dialog for managing:
 1. Get an API key from [OpenAI's platform](https://platform.openai.com/api-keys)
 2. Use the command: `set openai-key YOUR_API_KEY` in Carbon Commander
 
+### Gemini Setup
+(fill this in)
+
 ### Ollama Setup (Optional)
 1. Install [Ollama](https://ollama.ai)
 2. For macOS users, enable external connections:
@@ -302,7 +305,7 @@ One key learning from this project was the importance of MCP (Model Context Prot
 
 ## License
 
-This project is licensed under the GNU Lesser General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 

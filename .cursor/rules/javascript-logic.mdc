@@ -1,6 +1,7 @@
 ---
 description: "Javascript Code Project Description and Layout"
 globs: ["*.js", "*.jsx"]
+alwaysApply: false
 ---
 Carbon Commander is a Chrome extension.
 
@@ -44,7 +45,7 @@ The file acts as the central controller for the extension, managing both the UI 
    - AI request routing
    - Tool execution proxying
    - Command history persistence
-   - Provider status updates (OpenAI/Ollama)
+   - Provider status updates (Gemini/OpenAI/Ollama)
    - Keybinding configuration
 
 It essentially acts as the middleware that connects the UI layer with Chrome's extension APIs and background services.
@@ -58,7 +59,7 @@ It essentially acts as the middleware that connects the UI layer with Chrome's e
    - Handling AI requests and responses
    - Managing tool execution callbacks
    - Processing streaming responses
-   - Coordinating between OpenAI and Ollama providers
+   - Coordinating between Gemini, OpenAI and Ollama providers
 
 2. Provides core extension functionality:
    - Extension installation handling
@@ -74,7 +75,7 @@ It serves as the central coordinator for all AI-related operations and extension
 `caller.js` is the AI service orchestrator that:
 
 1. Manages AI provider integrations:
-   - Coordinates between OpenAI and Ollama clients
+   - Coordinates between Gemini, OpenAI and Ollama clients
    - Handles provider availability and fallbacks
    - Manages model selection and mapping
 
@@ -100,7 +101,7 @@ It serves as the central coordinator for all AI-related operations and extension
 - Maintains state of multiple MCP connections and their toolsets
 - Provides unified access to both local and remote tools through a consistent API
 
-## [secure-messaging.js]([secure-messaging.js](mdc:src/chrome-carbonbar-page/secure-messaging.js))
+## [secure-messaging.js](mdc:[secure-messaging.js](mdc:src/chrome-carbonbar-page/secure-messaging.js))
 
 `secure-messaging.js` is the security layer that:
 

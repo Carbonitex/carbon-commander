@@ -148,7 +148,7 @@ class GeneralTools {
     static GenerateImage = {
         function: {
             name: 'generate_image',
-            description: 'Generate an image using DALL-E',
+            description: 'Generate an image using AI (OpenAI/Gemini)',
             parameters: {
                 type: 'object',
                 properties: {
@@ -158,57 +158,79 @@ class GeneralTools {
                     },
                     size: {
                         type: 'string',
-                        description: 'Image size (256x256, 512x512, or 1024x1024)',
-                        enum: ['256x256', '512x512', '1024x1024'],
+                        description: 'Image size (256x256, 512x512, 1024x1024, or aspect ratios for Gemini)',
+                        enum: ['256x256', '512x512', '1024x1024', '1792x1024', '1024x1792'],
                         default: '1024x1024'
+                    },
+                    provider: {
+                        type: 'string',
+                        description: 'The provider to use for image generation (openai or gemini)',
+                        enum: ['openai', 'gemini'],
                     },
                     style: {
                         type: 'string',
-                        description: 'Image style (vivid or natural)',
+                        description: 'Image style (vivid or natural) - OpenAI only',
                         enum: ['vivid', 'natural'],
                         default: 'vivid'
-                    },
-                    openai_key: {
-                        type: 'string',
-                        description: 'The OpenAI API key to use for image generation',
                     }
                 },
-                required: ['prompt', 'openai_key']
+                required: ['prompt']
             }
         },
         execute: async function(scope, args) {
-            const { prompt, size = '1024x1024', style = 'vivid', openai_key } = args;
+            let { prompt, size = '1024x1024', provider, style = 'vivid' } = args;
             
-            // Get OpenAI key from settings
-            const openaiKey = openai_key;
-            if (!openaiKey) {
-                return { 
-                    success: false, 
-                    error: 'OpenAI API key not set. Please set it using the set-openai-key command.' 
-                };
-            }
-
             try {
-                const response = await fetch('https://api.openai.com/v1/images/generations', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${openaiKey}`
-                    },
-                    body: JSON.stringify({
-                        prompt,
-                        n: 1,
-                        size,
-                        style
-                    })
+                // Create a unique request ID for this image generation
+                const requestId = 'img_gen_' + Math.random().toString(36).substring(2, 15);
+                
+                // Set up promise to wait for response from service worker
+                const responsePromise = new Promise((resolve, reject) => {
+                    const messageHandler = (event) => {
+                        if (event.data.type === 'CARBON_CB_IMAGE_GENERATION_RESPONSE' && 
+                            event.data.payload.payload.requestId === requestId) {
+                            window.removeEventListener('message', messageHandler);
+                            console.log('CB_IMAGE_GENERATION_RESPONSE2?', event.data.payload.payload);
+                            if (event.data.payload.payload.error) {
+                                reject(new Error(event.data.payload.payload.error));
+                            } else {
+                                resolve(event.data.payload.payload.result);
+                            }
+                        }
+                    };
+                    
+                    window.addEventListener('message', messageHandler);
+                    
+                    // Send request to service worker
+                    window.postMessage({
+                        type: 'CB_IMAGE_GENERATION',
+                        payload: {
+                            requestId,
+                            prompt,
+                            size,
+                            n: 1,
+                            provider,
+                            style // Only used for OpenAI
+                        }
+                    }, window.location.origin);
+                    
+                    // Set a timeout in case the service worker doesn't respond
+                    setTimeout(() => {
+                        window.removeEventListener('message', messageHandler);
+                        reject(new Error('Image generation request timed out'));
+                    }, 60000); // 60-second timeout
                 });
-
-                const data = await response.json();
-                if (data.error) {
-                    return { success: false, error: data.error.message };
+                
+                // Wait for the response from the service worker
+                let url = `data:image/png;base64,${await responsePromise}`;
+                if(window.cbImages) {
+                    window.cbImages.push({requestId, data: url});
+                } else {
+                    window.cbImages = [{requestId, data: url}];
                 }
 
-                return { success: true, result: data.data[0].url };
+                return { success: true, result: `https://carbonbar.app/image_${requestId}.png` };
+                
             } catch (error) {
                 return { success: false, error: error.message };
             }
@@ -660,7 +682,7 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
     static ManageKeyValue = {
         function: {
             name: 'manage_key_value',
-            description: 'Get or set key/value pairs for various services. Use this to manage API keys for OpenAI and other any other kind of data.',
+            description: 'Get or set key/value pairs for various services. Use this to manage API keys for OpenAI/Gemini and other any other kind of data.',
             parameters: {
                 properties: {
                     action: {
@@ -670,7 +692,7 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
                     },
                     key_name: {
                         type: 'string',
-                        description: 'The name of the key to read or write (e.g. "openai-key")'
+                        description: 'The name of the key to read or write (e.g. "openai-key", "gemini-key", etc)'
                     },
                     value: {
                         type: 'string',
@@ -741,6 +763,11 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
                 if (key_name === 'openai-key') {
                     // Use the existing SetOpenAIKey tool's functionality
                     return await CarbonBarHelpTools.SetOpenAIKey.execute(scope, { key: value });
+                }
+
+                if (key_name === 'gemini-key') {
+                    // Use the existing SetGeminiKey tool's functionality
+                    return await CarbonBarHelpTools.SetGeminiKey.execute(scope, { key: value });
                 }
 
                 // For future key types, add handling here

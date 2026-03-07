@@ -12,6 +12,19 @@ export class APITests {
         }
     }
 
+    async testGeminiIntegration() {
+        console.log('Testing Gemini integration');
+        try {
+            // Test Gemini API integration
+            console.log('Checking Gemini connection...');
+            throw new Error('SKIP'); // Skip until API keys are mocked
+        } catch (error) {
+            if (error.message === 'SKIP') throw error;
+            console.error('Gemini integration test failed:', error.message);
+            throw error;
+        }
+    }
+
     async testOllamaIntegration() {
         console.log('Testing Ollama integration');
         try {

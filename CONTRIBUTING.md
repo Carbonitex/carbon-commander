@@ -42,12 +42,12 @@ Feel free to use AI assistants (like ChatGPT, Claude, etc.) when working on your
 
 ## A Note About the License
 
-The project uses the LGPL-3.0 License. This means you can:
-- Use the code in your own projects (even commercial ones)
+The project uses the MIT License. This means you can:
+- Use the code freely in your own projects (including commercial ones)
 - Modify and distribute the code
-- Keep your own code private when using this as a library
+- Use the code in proprietary software without releasing your source code
 
-Just make sure any changes to Carbon Commander itself remain open source.
+The only requirement is that you include the original copyright notice and license text in any copy of the software/source.
 
 ## Need Help?
 

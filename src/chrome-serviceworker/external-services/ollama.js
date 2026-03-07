@@ -1,10 +1,11 @@
 import { ccLogger } from '../../global.js';
 
 class OllamaClient {
-    static FAST_MODEL = "mistral-small";
+    static FAST_MODEL = "mistral-small3.1";
+    static AUTOCOMPLETE_MODEL = "gemma3:1b";
+    static VISION_MODEL = "mistral-small3.1";
     static REASON_MODEL = "deepseek-r1:70b";
-    static VISION_MODEL = "llama3.2-vision";
-
+    static IMAGE_MODEL = null; 
 
     //TODO: Create a downloader function for models with progress.
     //TODO: Integrate this with the app especially the new user flow.
@@ -257,10 +258,9 @@ class OllamaClient {
         ccLogger.group('Initializing required models');
         const requiredModels = [
             OllamaClient.FAST_MODEL,
-            'qwen2.5:14b',
-            'qwen2.5:1.5b'
+            OllamaClient.AUTOCOMPLETE_MODEL,
             //OllamaClient.REASON_MODEL,
-            //OllamaClient.VISION_MODEL
+            OllamaClient.VISION_MODEL
         ];
 
         for (const model of requiredModels) {
@@ -541,6 +541,58 @@ class OllamaClient {
         ccLogger.debug('No response from Ollama');
         ccLogger.groupEnd();
         return null;
+    }
+
+    // Add generateImage method stub (Not supported by standard Ollama API)
+    async generateImage(prompt, size = '1024x1024', n = 1, model = null) {
+        ccLogger.warn('Ollama image generation called, but not directly supported by standard API.');
+        // The standard Ollama /api/chat or /api/generate endpoints do not 
+        // directly support image generation models like DALL-E or Stable Diffusion.
+        // Specific multimodal models *might* interpret prompts to generate images,
+        // but this requires specific model setup and is not guaranteed.
+        // Throwing an error for now.
+        throw new Error('Image generation is not directly supported by the standard Ollama API. Requires a specific model and setup.');
+        
+        // If a specific model/endpoint is identified later, implementation would go here.
+        // Example structure:
+        /*
+        ccLogger.group('Ollama Image Generation (Experimental)');
+        model = model || OllamaClient.IMAGE_MODEL; // Use a known image gen model if available
+        if (!model) {
+            throw new Error('No specific Ollama image generation model configured.');
+        }
+
+        // Construct request for /api/generate or /api/chat 
+        // This part is highly dependent on the specific model used
+        const request = { 
+            model, 
+            prompt: `Generate an image: ${prompt}`, // Example prompt format
+            stream: false, 
+            // Other params specific to the image gen model
+        };
+        
+        ccLogger.debug('Ollama Image Generation Request:', request);
+        try {
+            const response = await fetch(`${this.hostEndpoint}/api/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Origin': chrome.runtime.getURL('') },
+                body: JSON.stringify(request)
+            });
+            
+            if (!response.ok) { throw new Error(`Ollama API Error: ${response.statusText}`); }
+            
+            const result = await response.json();
+            // Process result - format might vary wildly depending on model
+            // Need to extract image data (e.g., base64 string) if successful
+            ccLogger.info('Ollama Image Generation Attempt Finished');
+            ccLogger.groupEnd();
+            return [ { b64_json: result.imageData } ]; // Example return format
+        } catch (error) {
+            ccLogger.error('Ollama Image Generation Failed:', error);
+            ccLogger.groupEnd();
+            throw error;
+        }
+        */
     }
 }
 

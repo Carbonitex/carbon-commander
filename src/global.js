@@ -21,7 +21,24 @@ export const ccOneTimeMessageHandler = async (requestId) => {
     });
 }
 
-export const ccLogger = {
+
+export const ccLoggerEmpty = {
+    log: () => {},
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+    debug: () => {},
+    group: () => {},
+    groupEnd: () => {},
+    time: () => {},
+    timeEnd: () => {},
+    setPrefix: () => {
+        // Do nothing
+    }
+};  
+
+
+export const ccLoggerFull = {
     log: console.log,
     info: console.info,
     warn: console.warn,
@@ -62,21 +79,27 @@ export const ccLogger = {
     }
 };
 
+export const ccLogger = ccLoggerEmpty;
+
 export const AICallerModels = {
     ['FAST']: {
-        ollama: 'qwen2.5:14b',
-        openai: 'gpt-4o-mini'
+        ollama: 'mistral-small3.1',//'qwen2.5:14b',
+        openai: 'gpt-4o-mini',
+        gemini: 'gemini-2.5-flash-preview-04-17'
     },
     ['REASON']: {
-        ollama: "deepseek-r1:70b",
-        openai: "o3-mini"
+        ollama: 'mistral-small3.1',//"deepseek-r1:70b",
+        openai: "o4-mini",
+        gemini: 'gemini-2.5-pro-exp-03-25'
     },
     ['VISION']: {
-        ollama: "llama3.2-vision",
-        openai: "gpt-4o"
+        ollama: 'mistral-small3.1',//"llama3.2-vision",
+        openai: "gpt-4.1",
+        gemini: 'gemini-2.5-flash-preview-04-17'
     },
     ['AUTOCOMPLETE']: {
-        ollama: 'mistral-small',//"qwen2.5:1.5b",
-        openai: "gpt-4o-mini"
+        ollama: 'gemma3:1b',//'mistral-small',//"qwen2.5:1.5b",
+        openai: "gpt-4.1-nano",
+        gemini: 'gemini-2.0-flash-lite'
     }
 }

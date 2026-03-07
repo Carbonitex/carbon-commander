@@ -1,5 +1,6 @@
 import OllamaClient from './ollama.js';
 import OpenAIClient from './openai.js';
+import GeminiClient from './gemini.js';
 import CCLocalStorage from '../local-storage.js';
 import { ccLogger, AICallerModels } from '../../global.js';
 
@@ -8,6 +9,7 @@ class AICaller {
     constructor() {
         this.openai = OpenAIClient;
         this.ollama = OllamaClient;
+        this.gemini = GeminiClient;
         this.defaultProvider = '';
         this.disabledProviders = new Set();
         this.init();
@@ -16,11 +18,25 @@ class AICaller {
     async init() {
         ccLogger.group('Initializing AI Caller');
         try {            
+
+
+            //check all providers at once with promises
+            const providers = await Promise.all([
+                this.openai.isAvailable(),
+                this.gemini.isAvailable(),
+                this.ollama.isAvailable()
+            ]);
+            
+            const result = await providers;
+
             // Prioritize OpenAI over Ollama if both are available
-            if(await this.openai.isAvailable()) {
+            if(result[0]) {
                 ccLogger.info('OpenAI is available, setting as default provider');
                 this.setDefaultProvider('openai');
-            } else if(await this.ollama.isAvailable()) {
+            } else if(result[1]) {
+                ccLogger.info('Gemini is available, setting as default provider');
+                this.setDefaultProvider('gemini');
+            } else if(result[2]) {
                 ccLogger.info('Ollama is available, setting as default provider');
                 this.setDefaultProvider('ollama');
             } else {
@@ -42,8 +58,8 @@ class AICaller {
     }
 
     setDefaultProvider(provider) {
-        if(provider !== 'ollama' && provider !== 'openai' && provider !== 'local') {
-            throw new Error('Invalid provider. Must be either "ollama" or "openai" or "local"');
+        if(provider !== 'ollama' && provider !== 'openai' && provider !== 'local' && provider !== 'gemini') {
+            throw new Error('Invalid provider. Must be either "ollama" or "openai" or "local" or "gemini"');
         }
         if(provider == 'local')
             throw new Error('No local AI provider available, yet...', { details: "no_provider" });
@@ -77,6 +93,30 @@ class AICaller {
         }
     }
 
+    async setGeminiKey(key, testOnly = false, save = false) {
+        ccLogger.group('Setting Gemini API Key');
+        try {
+            // Test the key before setting it
+            await this.gemini.testKey(key);
+            
+            if(!testOnly) {
+                // If test passes, set it in the Gemini client
+                this.gemini.setApiKey(key, save);
+                this.setDefaultProvider('gemini');
+                ccLogger.info('Gemini API key set successfully');
+                if(save) {
+                    ccLogger.info('Gemini API key saved to storage');
+                }
+            }
+            ccLogger.groupEnd();
+            return true;
+        } catch (error) {
+            ccLogger.error('Failed to set Gemini API key:', error);
+            ccLogger.groupEnd();
+            throw error;
+        }
+    }
+    
     getClient(provider = null) {
         provider = provider || this.defaultProvider;
         
@@ -88,17 +128,27 @@ class AICaller {
             throw new Error('OpenAI API key not set');
         }
 
+        if (provider === 'gemini' && !this.gemini.isAvailable()) {
+            throw new Error('Gemini API key not set');
+        }
+
         if (provider === 'ollama' && !this.ollama.isAvailable()) {
             throw new Error('Ollama is not available');
         }
 
-        return provider === 'openai' ? this.openai : this.ollama;
+        if(provider === 'openai') {
+            return this.openai;
+        } else if(provider === 'gemini') {
+            return this.gemini;
+        } else if(provider === 'ollama') {
+            return this.ollama;
+        }
     }
 
     async autocompleteSuggestions(commandBarInput, commandHistory, context) {
         ccLogger.group('Generating Autocomplete');
         let systemPrompt = `You are an AI that autocompletes commands in a command bar built to complete tasks for the user.`;
-        systemPrompt += `Command history:\n${commandHistory.join('\n')}`;
+        systemPrompt += `\nCommand history:\n${commandHistory.join('\n')}`;
         if(context && context.length > 0) {
             systemPrompt += `Context:\n${context}\n`;
         }
@@ -123,7 +173,8 @@ is about 5 words long
             messages.push({ role: 'user', content: commandBarInput });
         }
         
-        const provider = this.ollama.isAvailable() ? 'ollama' : 'openai';
+        
+        let provider = 'ollama';//this.defaultProvider;
 
         if(provider == 'openai') {
             //disabled for now
@@ -132,6 +183,12 @@ is about 5 words long
             return null;
         }
 
+        if(provider == 'gemini') {
+            //disabled for now
+            ccLogger.debug('Autocomplete disabled for Gemini');
+            ccLogger.groupEnd();
+            return null;
+        }
         
 
         const [suggestion, details] = await this.chatCompletion(messages, null, AICallerModels['AUTOCOMPLETE'][provider], provider, null, null, 0.4);
@@ -178,7 +235,7 @@ is about 5 words long
             }
 
             // Try to parse the JSON
-            const json = JSON.parse(jsonString.trim());
+            let json = JSON.parse(jsonString.trim());
             
             // Validate the structure
             if (!Array.isArray(json)) {
@@ -188,6 +245,12 @@ is about 5 words long
 
             if (this.validateSuggestions(json)) {
                 ccLogger.debug('Successfully parsed and validated JSON response');
+                
+                // Convert array of strings to array of objects with text property if needed
+                if (json.length > 0 && typeof json[0] === 'string') {
+                    json = json.map(item => ({ text: item }));
+                }
+                
                 ccLogger.groupEnd();
                 return json;
             } else {
@@ -204,6 +267,12 @@ is about 5 words long
 
     validateSuggestions(suggestions) {
         if (!Array.isArray(suggestions)) return false;
+        
+        // Check if we need to convert string array to object array
+        if (suggestions.length > 0 && typeof suggestions[0] === 'string') {
+            return suggestions.every(item => typeof item === 'string' && item.trim().length > 0);
+        }
+        
         return suggestions.every(item => 
             item && 
             typeof item === 'object' && 
@@ -300,47 +369,113 @@ is about 5 words long
 
     getModelForProvider(modelType) {
         if(!modelType) {
-            return AICallerModels['FAST'][this.defaultProvider];
+            // Default to FAST model if no type specified
+            return AICallerModels['FAST'][this.defaultProvider]; 
         }
 
-        if (typeof modelType === 'string') return modelType;
+        if (typeof modelType === 'string') {
+            // If a string is passed, assume it's a specific model name
+            return modelType; 
+        }
 
+        // If an object map is passed (like AICallerModels.REASON), find the appropriate one
         if(modelType[this.defaultProvider]) {
             return modelType[this.defaultProvider];
         }
 
-        return modelType['FAST'][this.defaultProvider];
+        // Fallback to the FAST model for the current provider if the specified type isn't found
+        ccLogger.warn(`Model type ${Object.keys(modelType).find(k => modelType[k] === modelType)} not found for provider ${this.defaultProvider}, defaulting to FAST model.`);
+        return AICallerModels['FAST'][this.defaultProvider];
     }
 
     supportsFeature(feature, provider = null) {
         provider = provider || this.defaultProvider;
+        // Add 'imageGeneration' feature support check
         const features = {
             vision: {
-                ollama: true,
-                openai: true
+                ollama: true, // Assuming multimodal models can handle this
+                openai: true,
+                gemini: true // Assuming multimodal models can handle this
             },
             streaming: {
                 ollama: true,
-                openai: true
+                openai: true,
+                gemini: true
             },
             tools: {
                 ollama: true,
-                openai: true
+                openai: true,
+                gemini: true
+            },
+            imageGeneration: {
+                ollama: false, // Ollama core API doesn't support image generation directly
+                openai: true, // OpenAI supports via DALL-E
+                gemini: true // Gemini API supports image generation via Imagen
             }
         };
-        return features[feature]?.[provider] || false;
+        
+        const supported = features[feature]?.[provider] || false;
+        ccLogger.debug(`Feature check: ${feature} for ${provider} = ${supported}`);
+        return supported;
+    }
+
+    async generateImage(prompt, size = '1024x1024', n = 1, model = null, provider = null) {
+        ccLogger.group('Generate Image');
+        provider = provider || this.defaultProvider;
+
+        if (!this.supportsFeature('imageGeneration', provider)) {
+            const errorMsg = `Image generation is not supported by the current provider: ${provider}`;
+            ccLogger.error(errorMsg);
+            ccLogger.groupEnd();
+            throw new Error(errorMsg);
+        }
+
+        const client = this.getClient(provider);
+        // Use a dedicated image model if available, otherwise let the client handle defaults
+        const actualModel = model || this.getModelForProvider(AICallerModels['IMAGE'] || null);
+
+        ccLogger.debug('Starting image generation:', {
+            provider,
+            model: actualModel,
+            prompt: prompt.substring(0, 50) + '...', // Log truncated prompt
+            size,
+            n
+        });
+
+        try {
+            // Size parameter handling:
+            // - OpenAI: Uses pixel dimensions (1024x1024, 1792x1024, 1024x1792)
+            // - Gemini: Converts pixel dimensions to aspect ratios internally (1:1, 16:9, 9:16, 4:3, 3:4)
+            // - Ollama: Not supported in standard API
+            const result = await client.generateImage(
+                prompt,
+                size,
+                n,
+                actualModel
+            );
+            ccLogger.info('Image generation completed successfully');
+            ccLogger.groupEnd();
+            // Expected result format: [{ url: '...' } or { b64_json: '...' }, ...]
+            return result; 
+        } catch (error) {
+            ccLogger.error('Image generation failed:', error);
+            ccLogger.groupEnd();
+            throw error;
+        }
     }
 
     disableProvider(provider) {
         ccLogger.info(`Disabling provider: ${provider}`);
         this.disabledProviders.add(provider);
         
-        // If this was the default provider, try to switch to another one
+        // If this was the default provider, try to switch to another one, make this better
         if (provider === this.defaultProvider) {
-            if (provider === 'openai' && !this.disabledProviders.has('ollama')) {
-                this.setDefaultProvider('ollama');
-            } else if (provider === 'ollama' && !this.disabledProviders.has('openai')) {
+            if (provider === 'openai' && !this.disabledProviders.has('gemini') && this.gemini.isAvailable()) {
+                this.setDefaultProvider('gemini');
+            } else if (provider === 'gemini' && !this.disabledProviders.has('openai') && this.openai.isAvailable()) {
                 this.setDefaultProvider('openai');
+            } else {
+                this.setDefaultProvider('ollama');
             }
         }
     }
@@ -352,6 +487,8 @@ is about 5 words long
         // If OpenAI is being enabled and we're currently using Ollama, switch back to OpenAI
         if (provider === 'openai' && this.defaultProvider === 'ollama') {
             this.setDefaultProvider('openai');
+        } else if (provider === 'gemini' && this.defaultProvider === 'ollama') {
+            this.setDefaultProvider('gemini');
         }
     }
 }

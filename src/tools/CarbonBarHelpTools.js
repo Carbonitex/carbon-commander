@@ -8,6 +8,7 @@ class CarbonBarHelpTools {
     static GetNoAIModeToolInfo() {
         return [
             CarbonBarHelpTools.SetOpenAIKey.function,
+            CarbonBarHelpTools.SetGeminiKey.function,
             CarbonBarHelpTools.CheckOllamaStatus.function,
             CarbonBarHelpTools.GetSetupGuide.function,
             CarbonBarHelpTools.GetUsageGuide.function,
@@ -29,6 +30,7 @@ class CarbonBarHelpTools {
 ## Setup Guides
 Use \`get_setup_guide [topic]\` with:
 - \`openai\` - OpenAI API setup and configuration
+- \`gemini\` - Gemini API setup and configuration
 - \`ollama\` - Ollama local AI setup and configuration
 - \`mcp\` - MCP service setup and integration
 - \`general\` - General setup and configuration overview
@@ -44,13 +46,16 @@ Use \`get_usage_guide [topic]\` with:
 1. Get OpenAI setup instructions:
    \`get_setup_guide openai\`
 
-2. Learn about keyboard shortcuts:
+2. Get Gemini setup instructions:
+   \`get_setup_guide gemini\`
+
+3. Learn about keyboard shortcuts:
    \`get_usage_guide keybinds\`
 
-3. Set up MCP services:
+4. Set up MCP services:
    \`get_setup_guide mcp\`
 
-4. Get general usage overview:
+5. Get general usage overview:
    \`get_usage_guide general\`
 
 ## Additional Help
@@ -61,6 +66,7 @@ Use \`get_usage_guide [topic]\` with:
 
 ## Quick Links
 - [OpenAI Platform](https://platform.openai.com)
+- [Gemini Platform](https://aistudio.google.com/app/apikey)
 - [Ollama Website](https://ollama.ai)
 - [Chrome Extensions](chrome://extensions)`;
 
@@ -71,12 +77,12 @@ Use \`get_usage_guide [topic]\` with:
     static GetSetupGuide = {
         function: {
             name: 'get_setup_guide',
-            description: 'Get detailed setup instructions for OpenAI, Ollama, and MCP',
+            description: 'Get detailed setup instructions for OpenAI, Gemini, Ollama, and MCP',
             parameters: {
                 properties: {
                     topic: {
                         type: 'string',
-                        description: 'The specific setup topic (openai, ollama, mcp, or general). Use list_guides to see all available guides.'
+                        description: 'The specific setup topic (openai, gemini, ollama, mcp, or general). Use list_guides to see all available guides.'
                     }
                 },
                 required: ['topic']
@@ -111,6 +117,37 @@ Use \`get_usage_guide [topic]\` with:
 - Keep your API key secure and never share it
 - Regularly rotate your API keys for security
 - Monitor your API usage on OpenAI's platform
+
+Need more help? Try:
+- \`get_usage_guide general\` for general usage
+- \`list_guides\` to see all available guides
+- \`check-ollama\` to verify Ollama status`;
+                    break;
+
+                case 'gemini':
+                    guide = `# Setting up Gemini
+
+1. Visit [Gemini Platform](https://aistudio.google.com/app/apikey)
+2. Create an account or sign in
+3. Go to [API Keys](https://aistudio.google.com/app/apikey)
+4. Click "Create new secret key"
+5. Copy your API key
+6. Use the command: \`set gemini-key YOUR_API_KEY\`
+
+## Additional Configuration
+- API key is stored securely and encrypted
+- Key can be updated any time with the same command
+- Use \`disconnect gemini\` to remove the key
+
+## Troubleshooting
+- Ensure your API key is valid and has sufficient credits
+- Check connection status in the status badges
+- If issues persist, try disconnecting and reconnecting
+
+## Tips
+- Keep your API key secure and never share it
+- Regularly rotate your API keys for security
+- Monitor your API usage on Gemini's platform
 
 Need more help? Try:
 - \`get_usage_guide general\` for general usage
@@ -271,6 +308,7 @@ Need more help? Try:
 1. Install the extension
 2. Configure providers:
    - OpenAI for advanced features (\`get_setup_guide openai\`)
+   - Gemini for advanced features (\`get_setup_guide gemini\`)
    - Ollama for local processing (\`get_setup_guide ollama\`)
    - MCP for external services (\`get_setup_guide mcp\`)
 3. Customize keyboard shortcuts
@@ -282,12 +320,17 @@ Need more help? Try:
    - Set key: \`set openai-key YOUR_KEY\`
    - Check status in badges
 
-2. **Ollama (Optional)**
+2. **Gemini (Optional)**
+   - Get API key: \`get_setup_guide gemini\`
+   - Set key: \`set gemini-key YOUR_KEY\`
+   - Check status in badges
+
+3. **Ollama (Optional)**
    - Install locally: \`get_setup_guide ollama\`
    - Runs automatically when detected
    - Provides faster local processing
 
-3. **MCP Services (Optional)**
+4. **MCP Services (Optional)**
    - Connect services: \`mcp connect [service-id] [endpoint]\`
    - View status in badges
    - Use service-specific tools
@@ -300,15 +343,15 @@ Need more help? Try:
    - Or use Chrome settings
 
 ## Verification
-1. Check OpenAI:
+1. Check OpenAI/Gemini:
    - Look for green status badge
    - Try a simple command
-   
-2. Check Ollama:
+
+3. Check Ollama:
    - Use \`check-ollama\` command
    - Verify status badge
 
-3. Check MCP:
+4. Check MCP:
    - Look for service badges
    - Try service-specific tools
 
@@ -320,6 +363,7 @@ Need more help? Try:
 
 Need more details? Try:
 - \`get_setup_guide openai\` for OpenAI setup
+- \`get_setup_guide gemini\` for Gemini setup
 - \`get_setup_guide ollama\` for Ollama setup
 - \`get_setup_guide mcp\` for MCP setup
 - \`get_usage_guide general\` for usage help
@@ -332,6 +376,7 @@ Need more details? Try:
                         result: "Invalid topic. Available guides:\n\n" +
                                "1. Setup Guides (use get_setup_guide):\n" +
                                "   - openai: OpenAI configuration\n" +
+                               "   - gemini: Gemini configuration\n" +
                                "   - ollama: Ollama setup\n" +
                                "   - mcp: MCP service setup\n" +
                                "   - general: Overall setup\n\n" +
@@ -427,6 +472,54 @@ Need more details? Try:
         }
     };
 
+    static SetGeminiKey = {
+        function: {
+            name: 'set_gemini_key',
+            description: 'Set the Gemini key',
+            parameters: {
+                properties: {
+                    key: {
+                        type: 'string',
+                        description: 'The Gemini key'
+                    }
+                },
+                required: ['key']
+            }
+        },
+        execute: async function(scope, args) {
+            const { key } = args;
+            scope.logMessage('set_gemini_key', key);
+            return new Promise((resolve, reject) => {
+                window.postMessage({
+                    type: 'CARBON_SET_GEMINI_KEY',
+                    payload: {
+                        key: key,
+                        save: true
+                    }
+                }, window.location.origin);
+
+                const listener = (event) => {   
+                    if (event.data.type === 'CARBON_SET_GEMINI_KEY_RESPONSE') {
+                        const payload = event.data.payload?.payload || event.data.payload;
+                        scope.logMessage('CARBON_SET_GEMINI_KEY_RESPONSE', event.data, payload);
+                        if(payload.success === true){
+                            window.postMessage({
+                                type: 'PROVIDER_STATUS_UPDATE',
+                                provider: 'gemini',
+                                status: true
+                            }, window.location.origin);
+                            resolve({success: true, content: 'Gemini key set successfully'});
+                        }else{
+                            resolve({success: false, content: 'Failed to set Gemini key'});
+                        }
+                        window.removeEventListener('message', listener);
+                    }
+                };
+                window.addEventListener('message', listener);
+            });
+        }
+    };
+
     static GetUsageGuide = {
         function: {
             name: 'get_usage_guide',
@@ -486,6 +579,7 @@ Need more details? Try:
 - \`get_usage_guide [topic]\`: Get detailed usage instructions
 - \`change-keybind\`: Change keyboard shortcut
 - \`set openai-key [key]\`: Set OpenAI API key
+- \`set gemini-key [key]\`: Set Gemini API key
 - \`check-ollama\`: Check Ollama status
 
 ## Navigation
@@ -548,7 +642,7 @@ Need more details? Try:
 
 ## Key Features
 1. **AI Integration**
-   - OpenAI for advanced processing
+   - OpenAI/Gemini for advanced processing
    - Ollama for local operations
    - Real-time responses
 

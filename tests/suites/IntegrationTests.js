@@ -28,7 +28,7 @@ export class IntegrationTests {
     async testAIProviderIntegration() {
         console.log('Testing AI provider integration');
         try {
-            // Test integration with AI providers (OpenAI, Ollama)
+            // Test integration with AI providers (OpenAI, Ollama, Gemini)
             console.log('Checking AI provider integration...');
             throw new Error('SKIP'); // Skip until AI provider mocks are implemented
         } catch (error) {

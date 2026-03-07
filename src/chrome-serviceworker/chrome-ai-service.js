@@ -3,6 +3,7 @@ import AICaller from './external-services/caller.js';
 
 let currentToolResolvePromise = null;
 let setOpenAIKeyIndex = 0;
+let setGeminiKeyIndex = 0;
 
 const ccLogMessage = (...args) => {
     console.log('[CCSW]', ...args);
@@ -177,7 +178,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    if(!message.type || (!message.type.startsWith('CARBON_') && !message.type.startsWith('CB_'))) {
+    if (unprefixedType === 'CHECK_GEMINI_AVAILABLE') {
+        try {
+            ccLogMessage('Checking Gemini availability');
+            AICaller.gemini.isAvailable().then(isAvailable => {
+                sendResponse({ available: isAvailable, noAIMode: message.payload?.noAIMode });
+            }).catch(error => { 
+                ccLogError('Error checking Gemini:', error);
+                sendResponse({ available: false });
+            });
+        } catch (error) {
+            ccLogError('Error checking Gemini:', error);
+            sendResponse({ available: false });
+        }
+        return true;
+    }
+
+    if (!message.type || (!message.type.startsWith('CARBON_') && !message.type.startsWith('CB_'))) {
         ccLogMessage('Received non-CARBON message (BAD):', message);
         return;
     }
@@ -266,6 +283,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
+    if (unprefixedType === 'SET_GEMINI_KEY') {
+        (async () => {
+            setGeminiKeyIndex++;
+            ccLogMessage('SET_GEMINI_KEY2', message.payload);
+            try {
+                const success = await AICaller.setGeminiKey(message.payload.key, message.payload.test, message.payload.save);
+                if (success && !message.payload.test) {
+                    // Send provider status update
+                    chrome.tabs.sendMessage(sender.tab.id, {
+                        type: 'PROVIDER_STATUS_UPDATE',
+                        provider: 'gemini',
+                        status: true
+                    });
+                }
+                sendResponse({ success });
+            } catch (error) {
+                ccLogError('Error setting Gemini key:', error);
+                sendResponse({ success: false, error: error.message });
+            }
+        })();
+        return true;
+    }
 
 
     if (unprefixedType === 'REINITIALIZE_AI_CALLER') {
@@ -273,6 +312,89 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             ccLogMessage('AICaller reinitialized with provider:', newProvider);
             sendResponse({ success: true, provider: newProvider });
         });
+        return true;
+    }
+
+    if (unprefixedType === 'CB_IMAGE_GENERATION') {
+        const { requestId, prompt, size, n, provider, style } = message.payload;
+        
+        ccLogMessage('Received image generation request:', message.payload);
+        
+        // Determine which provider to use
+        let imageProvider = provider || AICaller.defaultProvider;
+        if (imageProvider === 'ollama') {
+            // Ollama doesn't support image generation, fall back to a different provider
+            if (AICaller.openai.isAvailable()) {
+                imageProvider = 'openai';
+            } else if (AICaller.gemini.isAvailable()) {
+                imageProvider = 'gemini';
+            } else {
+                // No available image generation provider
+                chrome.tabs.sendMessage(sender.tab.id, {
+                    type: 'CARBON_IMAGE_GENERATION_RESPONSE',
+                    payload: {
+                        requestId,
+                        error: 'No available image generation provider. Please set up OpenAI or Gemini.'
+                    }
+                });
+                sendResponse({ success: false });
+                return true;
+            }
+        }
+        
+        // For OpenAI, pass the style parameter
+        let model = null;
+        const options = {};
+        if (imageProvider === 'openai' && style) {
+            options.style = style;
+        }
+        
+        // Generate the image using the AICaller
+        AICaller.generateImage(prompt, size, n, model, imageProvider)
+            .then(results => {
+                ccLogMessage('Image generation successful:', results);
+                
+                const payload = {
+                    success: true,
+                    requestId,
+                    result: results[0].url || results[0].b64_json,
+                    isBase64: !!results[0].b64_json,
+                    all_results: results
+                };
+                
+
+                // Send results back to the content script
+                //chrome.tabs.sendMessage(sender.tab.id, {
+                //    type: 'CARBON_IMAGE_GENERATION_RESPONSE',
+                //    payload: {
+                //        requestId,
+                //        result: results[0].url || results[0].b64_json,
+                //        isBase64: !!results[0].b64_json,
+                //        all_results: results
+                //    }
+                //});
+                
+                sendResponse(payload);
+            })
+            .catch(error => {
+                ccLogError('Image generation failed:', error);
+                const payload = {
+                    success: false,
+                    requestId,
+                    error: error.message || 'Unknown error generating image'
+                };
+                // Send error back to the content script
+                //chrome.tabs.sendMessage(sender.tab.id, {
+                //    type: 'CARBON_IMAGE_GENERATION_RESPONSE',
+                //    payload: {
+                //        requestId,
+                //        error: error.message || 'Unknown error generating image'
+                //    }
+                //});
+                
+                sendResponse(payload);
+            });
+        
         return true;
     }
 
@@ -297,6 +419,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 });
             }
         }
+
+        if (provider === 'gemini') {
+            if (!enabled) {
+                AICaller.disableProvider('gemini');
+                chrome.tabs.sendMessage(sender.tab.id, {
+                    type: 'PROVIDER_STATUS_UPDATE',
+                    provider: 'gemini',
+                    status: false
+                });
+            } else {
+                // Re-enable Gemini if we have a key
+                AICaller.enableProvider('gemini');
+                chrome.tabs.sendMessage(sender.tab.id, {
+                    type: 'PROVIDER_STATUS_UPDATE',
+                    provider: 'gemini',
+                    status: true
+                });
+            }
+        }
+        
         sendResponse({ success: true });
         return true;
     }
