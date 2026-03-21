@@ -1,9 +1,10 @@
 import { ccLogger } from '../global.js';
 import settings from './settings.js';
+import BaseToolCaller from './base-tool-caller.js';
 
-class MCPToolCaller {
+class MCPToolCaller extends BaseToolCaller {
     constructor() {
-        this.currentPageTools = null;
+        super();
         this.mcpClients = new Map(); // Map of MCP client connections
         this.mcpConfig = new Map(); // Map of MCP service configurations
         this.mcpToolsets = new Map(); // Map of MCP-provided toolsets
@@ -44,12 +45,50 @@ class MCPToolCaller {
         }
     }
 
+    // Validate that an endpoint URL is safe (HTTPS or localhost)
+    static validateEndpointUrl(endpoint) {
+        try {
+            const url = new URL(endpoint);
+            const isLocalhost = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1';
+            if (url.protocol !== 'https:' && !isLocalhost) {
+                throw new Error(`MCP endpoint must use HTTPS (got ${url.protocol}). Only localhost is exempt.`);
+            }
+            return url;
+        } catch (error) {
+            if (error.message.startsWith('MCP endpoint')) throw error;
+            throw new Error(`Invalid MCP endpoint URL: ${endpoint}`);
+        }
+    }
+
+    // Validate tool discovery response schema
+    static validateToolDiscoveryResponse(toolsets) {
+        if (!Array.isArray(toolsets)) {
+            throw new Error('Tool discovery response must be an array');
+        }
+        for (const toolset of toolsets) {
+            if (!toolset.name || typeof toolset.name !== 'string') {
+                throw new Error('Each toolset must have a string "name" property');
+            }
+            if (!Array.isArray(toolset.tools)) {
+                throw new Error(`Toolset "${toolset.name}" must have a "tools" array`);
+            }
+            for (const tool of toolset.tools) {
+                if (!tool.name || typeof tool.name !== 'string') {
+                    throw new Error(`Tools in "${toolset.name}" must have a string "name" property`);
+                }
+            }
+        }
+    }
+
     // MCP-specific methods
     async configureMCPService(serviceConfig) {
         const { serviceId, endpoint, apiKey, options = {} } = serviceConfig;
-        
+
         ccLogger.debug(`Configuring MCP service: ${serviceId}`);
-        
+
+        // Validate endpoint URL
+        MCPToolCaller.validateEndpointUrl(endpoint);
+
         try {
             const config = {
                 endpoint,
@@ -168,7 +207,10 @@ class MCPToolCaller {
             }
 
             const toolsets = await response.json();
-            
+
+            // Validate response schema
+            MCPToolCaller.validateToolDiscoveryResponse(toolsets);
+
             // Process and store discovered toolsets
             toolsets.forEach(toolset => {
                 // Add MCP-specific wrapper around toolset
@@ -289,6 +331,14 @@ class MCPToolCaller {
             throw new Error(`MCP client ${serviceId} not connected`);
         }
 
+        // Validate function name against discovered tools
+        const discoveredTools = Array.from(this.mcpToolsets.values())
+            .filter(ts => ts.name.startsWith(`${serviceId}:`))
+            .flatMap(ts => ts.tools.map(t => t.function.name));
+        if (discoveredTools.length > 0 && !discoveredTools.includes(functionName)) {
+            throw new Error(`Function "${functionName}" not found in discovered tools for service ${serviceId}`);
+        }
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -326,7 +376,7 @@ class MCPToolCaller {
     // Tool management methods with MCP support
     reset() {
         ccLogger.debug('Resetting MCP tool caller state');
-        this.currentPageTools = null;
+        super.reset();
         // Don't reset MCP configurations/connections unless explicitly requested
     }
 
@@ -424,54 +474,6 @@ class MCPToolCaller {
         
         ccLogger.groupEnd();
         return scope;
-    }
-
-    getAllToolSetsForPage() {
-        if(this.currentPageTools) {
-            return this.currentPageTools;
-        }
-        
-        ccLogger.group('Getting Tool Sets for Page');
-        this.currentPageTools = this.getAllToolsets().filter(toolSet => 
-            (toolSet.tools && toolSet.tools.length > 0) &&
-            (toolSet.toolSet._CarbonBarPageLoadFilter && toolSet.toolSet._CarbonBarPageLoadFilter(window))
-        );
-        
-        ccLogger.debug(`Found ${this.currentPageTools.length} tool sets for current page`);
-        ccLogger.groupEnd();
-        return this.currentPageTools;
-    }
-
-    getAllToolsets() {
-        ccLogger.group('Getting All Tool Sets');
-        const allTools = [];
-        if (window.sbaiTools) {
-            Object.entries(window.sbaiTools).forEach(([_, toolSet]) => {
-                try {
-                    let toolset = {
-                        name: toolSet.name,
-                        toolSet: toolSet,
-                        tools: Object.getOwnPropertyNames(toolSet)
-                            .filter(prop => typeof toolSet[prop] === 'object' && toolSet[prop]?.function)
-                            .map(prop => toolSet[prop])
-                    };
-
-                    ccLogger.debug('Processing toolset:', { 
-                        name: toolset.name, 
-                        toolCount: toolset.tools.length 
-                    });
-
-                    if(toolset.tools && toolset.tools.length > 0) {
-                        allTools.push(toolset);
-                    }
-                } catch (e) {
-                    ccLogger.error(`Error getting tools from ${toolSet.name}:`, e);
-                }
-            });
-        }
-        ccLogger.debug(`Total tool sets found: ${allTools.length}`);
-        ccLogger.groupEnd();
-        return allTools;
     }
 
     // MCP Service management methods

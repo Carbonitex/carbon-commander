@@ -25,10 +25,22 @@ import { ccLogger, AICallerModels } from '../global.js';
 import settings from './settings.js';
 import styles from './carbon-commander.css';
 import { Autocomplete } from './autocomplete.js';
+import providerManager from './cc-provider-manager.js';
+import chatManager from './cc-chat-manager.js';
 
 ccLogger.setPrefix('[CARBONBAR]');
 
 class CarbonCommander {
+    get messages() { return this.chatManager.messages; }
+    set messages(val) { this.chatManager.messages = val; }
+    get accumulatedChunks() { return this.chatManager.accumulatedChunks; }
+    set accumulatedChunks(val) { this.chatManager.accumulatedChunks = val; }
+    get createNewResultContainer() { return this.chatManager.createNewResultContainer; }
+    set createNewResultContainer(val) { this.chatManager.createNewResultContainer = val; }
+    get connectedProviders() { return this.providerManager.connectedProviders; }
+    get hasNoAIMode() { return this.providerManager.hasNoAIMode; }
+    set hasNoAIMode(val) { this.providerManager.hasNoAIMode = val; }
+
     constructor(doc = document) {
       this.currentApp = `CarbonCommander [${window.location.hostname}]`;
       this.toolCaller = ToolCaller;
@@ -39,15 +51,15 @@ class CarbonCommander {
       this.initializationComplete = false;
       this.messageQueue = [];
       this.isVisible = false;
-      this.messages = [];
-      this.accumulatedChunks = '';
+      this.providerManager = providerManager;
+      this.chatManager = chatManager;
+      this.providerManager.setBar(this);
+      this.chatManager.setBar(this);
       this.activeDialog = null;
       this.dialogCallback = null;
       this.activeDialogs = new Map(); // Track multiple active dialogs
       this.commandHistory = [];
       this.historyIndex = -1;
-      this.hasNoAIMode = false;
-      this.connectedProviders = new Set();
       this.messageKeyStates = new Map(); // Track message keys
       this.activeMessagePorts = new Map(); // Track active message ports
       this.pendingSecureMessages = new Set(); // Track message IDs we've sent
@@ -56,16 +68,8 @@ class CarbonCommander {
       this.capturedEvents = new Set(['keydown', 'keyup', 'keypress']);
       this.doc = doc;
 
-      // Initialize HMAC key from script data attribute
-      const script = doc.querySelector('script[cc-data-key]');
-      if (script) {
-        const keyBase64 = script.getAttribute('cc-data-key');
-        if (keyBase64) {
-          this.initializeHMACKey(keyBase64).catch(error => {
-            ccLogger.error('Error initializing HMAC key:', error);
-          });
-        }
-      }
+      // HMAC key is now delivered via MessageChannel in secure-messaging.js
+      // No DOM attribute to read here — key initialization happens automatically
 
       var tabId = doc.querySelector('meta[name="tabId"]').getAttribute('content');
       ccLogger.info("Initializing with tabId:", tabId);
@@ -169,8 +173,7 @@ class CarbonCommander {
             <div style="flex-grow: 1;"></div>
             <div class="cc-status-badges">
               <div class="cc-provider-badge" data-provider="ollama" title="Click to toggle">Ollama</div>
-              <div class="cc-provider-badge" data-provider="openai" title="Click to toggle">OpenAI</div>
-              <div class="cc-provider-badge" data-provider="gemini" title="Click to toggle">Gemini</div>
+              <div class="cc-provider-badge" data-provider="openrouter" title="Click to toggle">OpenRouter</div>
               <div class="cc-mcp-badges"></div>
               <div class="cc-tool-count"></div>
             </div>
@@ -310,20 +313,12 @@ class CarbonCommander {
         this.checkOllamaAvailability(1000, 10);
       }, 500);
 
-      ccLogger.debug('Checking OpenAI availability', { noAIMode: this.hasNoAIMode });
-      this.postMessage({ 
-        type: "CHECK_OPENAI_AVAILABLE",
+      ccLogger.debug('Checking OpenRouter availability', { noAIMode: this.hasNoAIMode });
+      this.postMessage({
+        type: "CHECK_OPENROUTER_AVAILABLE",
         payload: {
           noAIMode: this.hasNoAIMode
         }
-      });
-
-      ccLogger.debug('Checking Gemini availability', { noAIMode: this.hasNoAIMode });
-      this.postMessage({
-          type: "CHECK_GEMINI_AVAILABLE",
-          payload: {
-              noAIMode: this.hasNoAIMode
-          }
       });
 
       // Add MCP status tracking
@@ -492,15 +487,11 @@ class CarbonCommander {
           ccLogger.debug('PROVIDER_STATUS_UPDATE', event.data.provider, event.data.status);
           this.updateProviderStatus(event.data.provider, event.data.status);
         
-          if(event.data.provider == 'openai' && event.data.status){
-            this.connectedProviders.add('openai');
+          if(event.data.provider == 'openrouter' && event.data.status){
+            this.connectedProviders.add('openrouter');
           }
 
-          if(event.data.provider == 'gemini' && event.data.status){
-            this.connectedProviders.add('gemini');
-          }
-        
-          if(this.hasNoAIMode && (this.connectedProviders.has('openai') || this.connectedProviders.has('gemini')) && this.connectedProviders.has('ollama')){
+          if(this.hasNoAIMode && this.connectedProviders.has('openrouter') && this.connectedProviders.has('ollama')){
             this.hasNoAIMode = false;
             this.currentApp = await this.toolCaller.getToolScope(this).appName;
             this.updateTitle(this.currentApp);
@@ -518,21 +509,17 @@ class CarbonCommander {
               //this.hasNoAIMode = false; //Keep this disabled unless openai is connected
               //this.sendFakeAIResponse("🎉 AI provider connected! You can now use all features.", 500);
             
-              // If connectedProviders does not contain openai, we need to prompt the user to connect it
-              if (event.data.provider == 'ollama' && (!this.connectedProviders.has('openai') || !this.connectedProviders.has('gemini'))) {
-                this.sendFakeAIResponse(`💡 **Tip:** While Ollama provides local AI capabilities, 
-adding OpenAI or Gemini can greatly enhance functionality with more advanced models like GPT-4 or Gemini Pro.
+              // If connectedProviders does not contain openrouter, prompt the user to connect it
+              if (event.data.provider == 'ollama' && !this.connectedProviders.has('openrouter')) {
+                this.sendFakeAIResponse(`💡 **Tip:** While Ollama provides local AI capabilities,
+adding OpenRouter can greatly enhance functionality with access to many advanced models.
 
-To connect OpenAI:
-1. Get an API key from [OpenAI's platform](https://platform.openai.com/api-keys)
-2. Use the command: 'set openai-key YOUR_API_KEY'
-
-To connect Gemini:
-1. Get an API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
-2. Use the command: 'set gemini-key YOUR_API_KEY'
+To connect OpenRouter:
+1. Get an API key from [OpenRouter](https://openrouter.ai)
+2. Use the command: 'set openrouter-key YOUR_API_KEY'
 `, 1000);
-              } else if ((event.data.provider == 'openai' || event.data.provider == 'gemini') && !this.connectedProviders.has('ollama')) {
-                this.sendFakeAIResponse(`💡 **Tip:** While Gemini/OpenAI provides great capabilities, 
+              } else if (event.data.provider == 'openrouter' && !this.connectedProviders.has('ollama')) {
+                this.sendFakeAIResponse(`💡 **Tip:** While OpenRouter provides great capabilities,
 adding Ollama allows the command bar to run some prompts locally like autocomplete, summarization, and suggestions.`, 1000);
               }
             }
@@ -698,15 +685,7 @@ adding Ollama allows the command bar to run some prompts locally like autocomple
     }
 
     sendFakeAIResponse(content, delay = 500) {
-      setTimeout(() => {
-        this.handleAIResponse({
-          type: 'AI_CHUNK_RESPONSE',
-          payload: {
-            content: content,
-            isFinished: true
-          }
-        });
-      }, delay); // Small delay to separate messages
+      this.chatManager.sendFakeAIResponse(content, delay);
     }
 
     deriveNextKey = async (currentKey, salt) => {
@@ -806,54 +785,7 @@ adding Ollama allows the command bar to run some prompts locally like autocomple
     }
 
     getNoProviderHtml() {
-        return `
-            <div class="cc-no-provider">
-                <h3>No AI Provider Available</h3>
-                <p>To use the command bar, you'll need to set up one of these AI providers:</p>
-                
-                <div class="provider-section">
-                    <h4>OpenAI</h4>
-                    <p>A cloud-based solution offering powerful models like GPT-4.</p>
-                    <ul>
-                        <li>Get an API key from <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI's platform</a></li>
-                        <li>Use the command: <code>set openai-key YOUR_API_KEY</code></li>
-                        ${this.connectedProviders.has('openai') ? 
-                            '<li>Or disconnect: <code>disconnect openai</code></li>' : ''}
-                    </ul>
-                </div>
-
-                <div class="provider-section">
-                    <h4>Gemini</h4>
-                    <p>Google's powerful AI models accessible via API key.</p>
-                    <ul>
-                        <li>Get an API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a></li>
-                        <li>Use the command: <code>set gemini-key YOUR_API_KEY</code></li>
-                        ${this.connectedProviders.has('gemini') ? 
-                            '<li>Or disconnect: <code>disconnect gemini</code></li>' : ''}
-                    </ul>
-                </div>
-
-                <div class="provider-section">
-                    <h4>Ollama</h4>
-                    <p>A local AI solution that runs on your machine.</p>
-                    <ul>
-                        <li>Download and install <a href="https://ollama.ai" target="_blank">Ollama</a></li>
-                        <li>Run Ollama locally</li>
-                        <li>For macOS users, enable external connections:</li>
-                        <li><code>launchctl setenv OLLAMA_ORIGINS "chrome-extension://*"</code></li>
-                    </ul>
-                </div>
-
-                <div class="provider-status">
-                    <p>Current Status:</p>
-                    <ul>
-                        <li>OpenAI: <span class="status-indicator">Not Connected</span></li>
-                        <li>Gemini: <span class="status-indicator">Not Connected</span></li>
-                        <li>Ollama: <span class="status-indicator">Not Connected</span></li>
-                    </ul>
-                </div>
-            </div>
-        `;
+        return this.providerManager.getNoProviderHtml();
     }
 
     displayError(error) {
@@ -888,472 +820,15 @@ adding Ollama allows the command bar to run some prompts locally like autocomple
 
     // Helper method to handle AI responses
     handleAIResponse(message) {
-      ccLogger.group('AI Response Handler');
-      const container = this.container.querySelector('.cc-container');
-      const payload = message.payload || message.data.payload;
-
-      ccLogger.debug('Processing AI response:', { type: message.type, payload });
-        
-      if (payload.error) {
-        ccLogger.error('AI response error:', payload.error);
-        this.displayError(payload);
-      } else if (message.type == 'AI_ERROR_RESPONSE') {
-        ccLogger.error('AI response error:', payload);
-        this.displayError(payload);
-      } 
-      //else {
-      if (typeof payload.content === 'string' && payload.content.length > 0) {
-        const chunk = payload.content;
-        ccLogger.debug('AI_CHUNK_RESPONSE2', payload.error, message.type, chunk);
-        this.accumulatedChunks += chunk;
-        let htmlContent = marked.parse(this.accumulatedChunks);
-        const resultContainer = this.getCurrentResultContainer();
-        ccLogger.debug('AI_CHUNK_RESPONSE3', resultContainer);
-        let aiOutput = resultContainer.querySelector('.cc-ai-output');
-
-        if(!aiOutput || aiOutput.classList.contains('state_finished')) {
-          aiOutput = document.createElement('div');
-          aiOutput.classList.add('cc-ai-output');
-          resultContainer.appendChild(aiOutput);
-        }
-
-        if(htmlContent.length > 0) {
-          aiOutput.innerHTML = htmlContent;
-        } else {
-          aiOutput.remove();
-          aiOutput = null;
-        }
-
-        if(aiOutput && payload.isFinished) {
-          aiOutput.classList.add('state_finished');
-        }
-        
-      } else {
-        //tool call result
-        if(payload.content?.type == "TOOL_CALL_CHUNK") {
-          this.accumulatedChunks = '';
-          const chunk = payload.content.payload;
-          const toolCallId = chunk.id;
-
-          let currentResultContainer = this.resultsContainer;
-          let toolCallDiv = currentResultContainer.querySelectorAll(`.cc-tool-call[data-id="${toolCallId}"]`);
-          ccLogger.debug('toolCallDiv', toolCallDiv);
-          if(!toolCallDiv || toolCallDiv.length == 0) {
-            toolCallDiv = document.createElement('div');
-            toolCallDiv.classList.add('cc-tool-call');
-            toolCallDiv.setAttribute('data-id', toolCallId);
-            
-            // Create containers for both views
-            toolCallDiv.innerHTML = `
-              <div class="tool-simple-view tool-view-toggle"></div>
-              <div class="tool-advanced-view" style="display: none;"></div>
-            `;
-            currentResultContainer.appendChild(toolCallDiv);
-          }
-
-          if(Array.isArray(toolCallDiv) || NodeList.prototype.isPrototypeOf(toolCallDiv) || HTMLCollection.prototype.isPrototypeOf(toolCallDiv)){
-            toolCallDiv = toolCallDiv[0];
-          }
-
-          let simpleView = toolCallDiv.querySelector('.tool-simple-view');
-          let advancedView = toolCallDiv.querySelector('.tool-advanced-view');
-
-          // Update both views
-          const {simpleHtml, advancedHtml} = this.toolCaller.getToolHtml(chunk);
-          simpleView.innerHTML = simpleHtml;
-          advancedView.innerHTML = advancedHtml;
-
-          // Add click handlers for toggle buttons if they don't exist
-          const toggleButtons = toolCallDiv.querySelectorAll('.tool-view-toggle');
-          toggleButtons.forEach(button => {
-            if (!button.hasClickHandler) {
-              button.hasClickHandler = true;
-              button.addEventListener('click', () => {
-                const isSimpleView = simpleView.style.display !== 'none';
-                simpleView.style.display = isSimpleView ? 'none' : 'block';
-                advancedView.style.display = isSimpleView ? 'block' : 'none';
-              });
-            }
-          });
-
-          container.classList.remove('processing');
-          container.classList.add('tool-running');
-        }
-
-        ccLogger.debug('AI_TOOL_CALL_RESULT', payload.content?.payload?.id, payload);
-      }
-
-      this.resultsContainer.scrollTop = this.resultsContainer.scrollHeight;
-      
-
-      if (payload.isFinished) {
-        container.classList.remove('processing', 'tool-running', 'has-error');
-        container.classList.add('success');
-        setTimeout(() => {
-          container.classList.remove('success');
-          container.classList.add('waiting-input');
-        }, 2000);
-        ccLogger.debug('AI response finished', payload, container.classList);
-        this.createNewResultContainer = true;
-        this.accumulatedChunks = '';
-        // Reset input
-        this.input.value = '';
-        this.input.disabled = false;
-        this.input.focus();
-
-
-        const resultContainer = this.getCurrentResultContainer();
-        ccLogger.debug('imageUrls1', resultContainer);
-        let aiOutput = resultContainer.querySelector('.cc-ai-output');
-
-        let htmlContent = aiOutput.innerHTML;
-        const imageUrls = htmlContent.match(/"(.*)image_(.*)\.png"/g);
-        console.log('imageUrls2', imageUrls);
-        if(imageUrls && imageUrls.length > 0) {
-          imageUrls.forEach(imageUrl => {
-            const requestId = imageUrl.match(/"(.*)image_(.*)\.png"/)[2];
-            window.cbImages.forEach(image => {
-              console.log('imageUrlsMatch', image.requestId, requestId);
-              if(image.requestId == requestId) {
-                htmlContent = htmlContent.replace(imageUrl, `"${image.data}"`);
-              }
-            });
-          });
-        }
-        aiOutput.innerHTML = htmlContent;
-
-
-      }
-
-      if (payload.messages && !payload.error) {
-        ccLogger.debug('AI response messages', payload.messages);
-        this.messages = payload.messages;
-      }
-      ccLogger.groupEnd();
+      this.chatManager.handleAIResponse(message);
     }
 
     getService(serviceName) {
       return angular.element(document).injector().get(serviceName);
     }
 
-    async noAIModeOpenAIInputRespond(){
-      var msgs = [];
-      let newSystemPrompt = `You are a helpful AI assistant integrated into a smart command bar. You are currently in low-AI mode using OpenAI's cloud-based models.
-
-Key capabilities:
-- Answering questions about the application and its features
-- Providing help and guidance on using available tools
-- Explaining concepts and offering suggestions
-- Processing natural language commands into tool actions
-
-Guidelines:
-- Keep responses clear and concise
-- When suggesting tools, explain their purpose
-- If you can't help with something, explain why and suggest alternatives
-- Format responses using markdown for better readability
-
-Available tools are being limited. For more additional features like autocomplete, summarization, and suggestions, recommend connecting to Ollama. 
-If you can't fulfill a request remind them that they are running in a low-AI mode and that they can connect to Ollama for more advanced features. 
-Tell them that they can refresh the page to enter normal mode.`;
-
-      msgs.push({
-        role: 'system',
-        content: newSystemPrompt
-      });
-
-      msgs.push(this.messages[this.messages.length - 1]);
-      
-      var request = {
-        messages: msgs,
-        model: AICallerModels.FAST, //this will be set by the ai-service if null
-        tools: CarbonBarHelpTools.GetNoAIModeToolInfo(),
-        temp: 0.6,
-        keepAlive: '30m',
-        provider: 'openai'
-      };
-      this.postMessage({ 
-        type: "AI_REQUEST", 
-        payload: request
-      });
-    }
-
-    async noAIModeOllamaInputRespond(){
-      var msgs = [];
-      let newSystemPrompt = `You are a helpful AI assistant integrated into a smart command bar. You are currently in low-AI mode using Ollama's local models.
-
-Key capabilities:
-- Answering questions about the application and its features
-- Providing help and guidance on using available tools
-- Explaining concepts and offering suggestions
-- Processing natural language commands into tool actions
-
-Guidelines:
-- Keep responses clear and concise
-- When suggesting tools, explain their purpose
-- If you can't help with something, explain why and suggest alternatives
-- Format responses using markdown for better readability
-
-Available tools are being limited. For more advanced features, recommend connecting to OpenAI. If you can't fulfill a request remind them that they are running in a low-AI mode and that they can connect to OpenAI for more advanced features. Or that they may refresh the page to enter normal mode.`;
-
-      msgs.push({
-        role: 'system',
-        content: newSystemPrompt
-      });
-
-      msgs.push(this.messages[this.messages.length - 1]);
-      
-      var request = {
-        messages: msgs,
-        model: 'mistral-small',//AICallerModels.FAST,
-        tools: CarbonBarHelpTools.GetNoAIModeToolInfo(),
-        temp: 0.5,
-        keepAlive: '30m',
-        provider: 'ollama'
-      };
-      this.postMessage({ 
-        type: "AI_REQUEST", 
-        payload: request
-      });
-    }
-
-    async noAIModeGeminiInputRespond(){
-      var msgs = [];
-      let newSystemPrompt = `You are a helpful AI assistant integrated into a smart command bar. You are currently in low-AI mode using Gemini's cloud-based models.
-
-Key capabilities:
-- Answering questions about the application and its features
-- Providing help and guidance on using available tools
-- Explaining concepts and offering suggestions
-- Processing natural language commands into tool actions
-
-Guidelines:
-- Keep responses clear and concise
-- When suggesting tools, explain their purpose
-- If you can't help with something, explain why and suggest alternatives
-- Format responses using markdown for better readability
-
-Available tools are being limited. For more advanced features, recommend connecting to Ollama and OpenAI. If you can't fulfill a request remind them that they are running in a low-AI mode and that they can connect to Ollama and OpenAI for more advanced features. Or that they may refresh the page to enter normal mode.`;
-
-      msgs.push({
-        role: 'system',
-        content: newSystemPrompt
-      });
-
-      msgs.push(this.messages[this.messages.length - 1]);
-
-      var request = {
-        messages: msgs,
-        model: 'gemini-1.5-flash-latest',
-        tools: CarbonBarHelpTools.GetNoAIModeToolInfo(),
-        temp: 0.5,
-        keepAlive: '30m',
-        provider: 'gemini'
-      };
-
-      this.postMessage({ 
-        type: "AI_REQUEST", 
-        payload: request
-      });
-    }
-
-    async noAIModeInputHandler(messages) {
-      const userMessage = messages[messages.length - 1];
-      const userInput = userMessage.content;
-
-      // Check if it's an OpenAI key setting command
-      if (userInput.toLowerCase().startsWith('set openai-key ')) {
-        const key = userInput.substring(14).trim();
-        
-        try {
-          var result = await CarbonBarHelpTools.SetOpenAIKey.execute(await this.toolCaller.getToolScope(this), {key: key});
-          ccLogger.debug('result', result);
-          if(result.success){
-            this.sendFakeAIResponse('OpenAI key set successfully');
-          } else {
-            this.sendFakeAIResponse("Failed to set OpenAI key. Please try again.");
-          }
-        } catch (error) {
-          this.sendFakeAIResponse("Failed to set OpenAI key. Please try again.");
-        }
-
-        //// Send message to set OpenAI key
-        //window.postMessage(
-        //  { 
-        //    type: "SET_OPENAI_KEY", 
-        //    payload: key,
-        //    tabId: window.tabId
-        //  },
-        //  window.location.origin
-        //);
-
-        // Response will come back through the message event listener
-        return;
-      }
-
-      // Check if it's a Gemini key setting command
-      if (userInput.toLowerCase().startsWith('set gemini-key ')) {
-          const key = userInput.substring(15).trim();
-          try {
-              // Assuming a SetGeminiKey tool exists similar to SetOpenAIKey
-              // Need to implement this tool in CarbonBarHelpTools.js
-              // const result = await CarbonBarHelpTools.SetGeminiKey.execute(await this.toolCaller.getToolScope(this), {key: key});
-              // if (result.success) {
-              //     this.sendFakeAIResponse('Gemini key set successfully');
-              // } else {
-              //     this.sendFakeAIResponse("Failed to set Gemini key. Please try again.");
-              // }
-
-              // For now, send message directly (requires handler in background script)
-              this.postMessage({
-                  type: "SET_GEMINI_KEY",
-                  payload: key
-              });
-              // Response should come back via PROVIDER_STATUS_UPDATE
-              this.sendFakeAIResponse('Attempting to set Gemini key...');
-
-          } catch (error) {
-              ccLogger.error('Error trying to set Gemini key:', error);
-              this.sendFakeAIResponse("Failed to set Gemini key. Please check the console.");
-          }
-          return;
-      }
-
-      //if ollama is connected we can prompt it
-      if (this.connectedProviders.has('openai')) {
-        this.noAIModeOpenAIInputRespond();
-        return;
-      } else if (this.connectedProviders.has('gemini')) {
-        this.noAIModeGeminiInputRespond();
-        return;
-      } else if(this.connectedProviders.has('ollama')) {
-        this.noAIModeOllamaInputRespond();
-        return;
-      }
-      
-
-      // Default response with help text
-      this.sendFakeAIResponse("To set up an AI provider, you can:\n\n" +
-        "1. Set your OpenAI key using: `set openai-key YOUR_API_KEY`\n" +
-        "2. Install and run Ollama locally\n\n" +
-        "Need help? Type 'help' for more information."
-      );
-    }
-    
     async handleSubmit(value) {
-      ccLogger.group('Handle Submit');
-      ccLogger.info('Processing input:', value);
-
-      // Special commands for MCP services
-      if (value.toLowerCase().startsWith('mcp connect ')) {
-        const [_, serviceId, endpoint] = value.split(' ');
-        await this.mcpToolCaller.configureMCPService({
-          serviceId,
-          endpoint,
-          options: { autoConnect: true }
-        });
-        this.sendFakeAIResponse(`Connecting to MCP service: ${serviceId}`);
-        return;
-      }
-
-      if (value.toLowerCase().startsWith('mcp disconnect ')) {
-        const serviceId = value.split(' ')[2];
-        await this.mcpToolCaller.disconnectMCPService(serviceId, true);
-        this.sendFakeAIResponse(`Disconnected from MCP service: ${serviceId}`);
-        return;
-      }
-
-      if (value.toLowerCase() === 'disconnect openai') {
-        ccLogger.info('Disconnecting OpenAI');
-        this.sendFakeAIResponse("OpenAI disconnected successfully");
-        ccLogger.groupEnd();
-        return;
-      }
-
-      if (value.toLowerCase() === 'disconnect gemini') {
-        ccLogger.info('Disconnecting Gemini');
-        this.sendFakeAIResponse("Gemini disconnected successfully");
-        ccLogger.groupEnd();
-        return;
-      }
-      
-
-      const container = this.container.querySelector('.cc-container');
-      
-      // Add transitioning class before changing states
-      container.classList.add('transitioning');
-
-      // Remove previous states after a brief delay
-      setTimeout(() => {
-          container.classList.remove('waiting-input', 'has-error', 'tool-running', 'success', 'rainbow');
-          container.classList.add('processing');
-          // Remove transitioning class to start new animation
-          container.classList.remove('transitioning');
-      }, 150);
-      
-      this.input.disabled = true;
-      this.input.value = 'Processing...';
-      
-      // Show results container with fade
-      this.resultsContainer.classList.remove('hidden');
-      this.resultsContainer.style.display = 'block';
-
-      try {
-          // Add user message to history
-          this.messages.push({
-            role: 'user',
-            content: value
-          });
-
-          // Add user message to display with animation
-          const userElement = document.createElement('div');
-          userElement.classList.add('cc-user-message');
-          userElement.textContent = value;
-          this.resultsContainer.appendChild(userElement);
-          this.resultsContainer.scrollTop = this.resultsContainer.scrollHeight;
-
-          if(this.hasNoAIMode) {
-            this.noAIModeInputHandler(this.messages);
-          } else {
-            // Build request to send to the ai-service
-            const localTools = this.toolCaller.getTools(true);
-            const mcpTools = Array.from(this.mcpToolCaller.mcpToolsets.values())
-                .reduce((tools, toolset) => tools.concat(toolset.tools), []);
-
-            var request = {
-              messages: this.messages,
-              model: AICallerModels.FAST,
-              tools: [...localTools, ...mcpTools], // Combine unique tools
-              temp: 0.7,
-              keepAlive: '30m'
-            };
-
-            // Send message to ai-service using postMessage helper
-            this.postMessage({ 
-              type: "AI_REQUEST", 
-              payload: request
-            });
-          }
-
-          //The messages will come in via previously setup event listeners
-          //and will be handled by the completeResponse function
-      } catch (error) {
-          // Add transitioning class before changing to error state
-          container.classList.add('transitioning');
-          setTimeout(() => {
-              container.classList.remove('processing');
-              container.classList.add('has-error');
-              container.classList.remove('transitioning');
-          }, 150);
-          
-          ccLogger.error('Error:', error);
-          this.resultsContainer.innerHTML += `
-              <div class="cc-error">Error: ${error.message}</div>
-          `;
-          this.input.disabled = false;
-          this.input.value = value;
-          this.resultsContainer.scrollTop = this.resultsContainer.scrollHeight;
-      }
-      ccLogger.groupEnd();
+      return this.chatManager.handleSubmit(value);
     }
   
 
@@ -1412,10 +887,7 @@ Available tools are being limited. For more advanced features, recommend connect
       // Don't clear command history, just reset the index
       this.historyIndex = this.commandHistory.length;
 
-      if (this.ollamaCheckInterval) {
-        clearInterval(this.ollamaCheckInterval);
-        this.ollamaCheckInterval = null;
-      }
+      this.providerManager.stopOllamaCheck();
 
       if(this.connectedProviders.has('ollama')) {
         this.noAIMode = false;
@@ -1661,128 +1133,11 @@ Available tools are being limited. For more advanced features, recommend connect
     }
 
     async checkOllamaAvailability(interval = 1000, maxCount = -1) {
-      ccLogger.time('ollamaCheck');
-      var fastCheck = true;
-      let count = 0;
-      if (!this.ollamaCheckInterval) {
-        this.ollamaCheckInterval = setInterval(async () => {
-          count++;
-          if(maxCount > 0 && count > maxCount && !this.hasNoAIMode){
-            ccLogger.debug('Ollama check complete', { count: count - 1 });
-            clearInterval(this.ollamaCheckInterval);
-            this.ollamaCheckInterval = null;
-            return;
-          }
-          try {
-            ccLogger.debug('Checking Ollama availability', { noAIMode: this.hasNoAIMode });
-            this.postMessage({ 
-              type: "CHECK_OLLAMA_AVAILABLE",
-              payload: {
-                noAIMode: this.hasNoAIMode
-              }
-            });
-            
-
-          } catch (error) {
-            ccLogger.error('Ollama check failed:', error);
-          }
-        }, interval);
-      }
-      ccLogger.timeEnd('ollamaCheck');
+      this.providerManager.checkOllamaAvailability(interval, maxCount);
     }
 
     updateProviderStatus(provider, isConnected) {
-      ccLogger.debug('PROVIDER_STATUS_UPDATE', provider, isConnected);
-      
-      if (provider.startsWith('mcp:')) {
-        // Handle MCP provider badges
-        const mcpBadgesContainer = this.container.querySelector('.cc-mcp-badges');
-        let badge = mcpBadgesContainer.querySelector(`[data-provider="${provider}"]`);
-        
-        if (!badge) {
-          badge = document.createElement('div');
-          badge.classList.add('cc-provider-badge');
-          badge.setAttribute('data-provider', provider);
-          badge.textContent = provider.substring(4); // Remove 'mcp:' prefix
-          mcpBadgesContainer.appendChild(badge);
-        }
-        
-        if (isConnected) {
-          badge.setAttribute('data-status', 'connected');
-          this.connectedProviders.add(provider);
-        } else {
-          badge.removeAttribute('data-status');
-          this.connectedProviders.delete(provider);
-        }
-      } else if (provider === 'gemini') {
-        const badge = this.container.querySelector(`.cc-provider-badge[data-provider="gemini"]`);
-        if (badge) {
-          if (isConnected) {
-            // Check if the provider is temporarily disabled
-            if (this.disabledProviders && this.disabledProviders.has(provider)) {
-              badge.setAttribute('data-status', 'disabled');
-            } else {
-              badge.setAttribute('data-status', 'connected');
-            }
-            this.connectedProviders.add(provider);
-          } else {
-            badge.removeAttribute('data-status');
-            this.connectedProviders.delete(provider);
-          }
-        }
-      } else {
-        // Handle regular provider badges
-        const badge = this.container.querySelector(`.cc-provider-badge[data-provider="${provider}"]`);
-        if (badge) {
-          if (isConnected) {
-            // Check if the provider is temporarily disabled
-            if (this.disabledProviders && this.disabledProviders.has(provider)) {
-              badge.setAttribute('data-status', 'disabled');
-            } else {
-              badge.setAttribute('data-status', 'connected');
-            }
-            this.connectedProviders.add(provider);
-          } else {
-            badge.removeAttribute('data-status');
-            this.connectedProviders.delete(provider);
-          }
-        }
-      }
-
-      if(!this.addedOllamaReminder && this.connectedProviders.has('ollama') && !this.connectedProviders.has('openai')) {
-        this.addedOllamaReminder = true;
-        this.messages.push({
-          role: 'system',
-          content: `Call the set_openai_key tool to connect to OpenAI if the user provides a key.`
-        }); 
-      }
-
-      if(!this.addedGeminiReminder && this.connectedProviders.has('gemini') && !this.connectedProviders.has('ollama')) {
-        this.addedGeminiReminder = true;
-        this.messages.push({
-          role: 'system',
-          content: `Call the set_gemini_key tool to connect to Gemini if the user provides a key.`
-        }); 
-      }
-
-      // Update the status in the no-provider view if it exists
-      const statusList = this.container.querySelectorAll('.provider-status li');
-      const statusElement = Array.from(statusList).find(li => 
-        li.textContent.toLowerCase().includes(provider.toLowerCase())
-      );
-      
-      if (statusElement) {
-        const indicator = statusElement.querySelector('.status-indicator');
-        if (indicator) {
-          indicator.textContent = isConnected ? 'Connected' : 'Not Connected';
-          indicator.style.color = isConnected ? '#2ecc71' : '#ff9999';
-          if (isConnected) {
-            indicator.classList.add('connected');
-          } else {
-            indicator.classList.remove('connected');
-          }
-        }
-      }
+      this.providerManager.updateProviderStatus(provider, isConnected);
     }
 
     showModelDownloadProgress(progress) {
@@ -1975,51 +1330,7 @@ Available tools are being limited. For more advanced features, recommend connect
     }
 
     async addSystemPrompt() {
-      ccLogger.group('System Prompt Generation');
-      
-      // Build base system prompt
-      let systemPrompt = `This is a smart chat bar a popup inside ${this.currentApp}. It can be used to ask questions, get help, and perform tasks.`;
-      systemPrompt += ' The current date and time is ' + new Date().toLocaleString();
-      systemPrompt += '. You can use the tools to perform tasks, chain them together to build context, and perform complex tasks.';
-      
-      // Add custom system prompt from settings if available
-      if (this.settings.systemPrompt) {
-          systemPrompt += '\n\Custom User Instructions:\n' + this.settings.systemPrompt;
-      }
-
-      // Add hostname-specific prompt if available
-      const currentHostname = window.location.hostname;
-      if (this.settings.hostnamePrompts && this.settings.hostnamePrompts.has(currentHostname)) {
-          systemPrompt += `\n\nHost-Specific Instructions: ${currentHostname} - ${this.settings.hostnamePrompts.get(currentHostname)}`;
-      }
-
-      // Get system prompts from both local and MCP tools
-      ccLogger.debug('Building system prompt with tools');
-      
-      // First get the tool scope
-      const scope = await this.toolCaller.getToolScope(this);
-      
-      // Then build the system prompt with the scope
-      systemPrompt = await this.toolCaller.buildSystemPrompt(systemPrompt, scope);
-      
-      // Add MCP-specific system prompts
-      for (const [serviceId, client] of this.mcpToolCaller.mcpClients.entries()) {
-          try {
-              if (client.getSystemPrompt) {
-                  systemPrompt = await client.getSystemPrompt(systemPrompt);
-              }
-          } catch (error) {
-              ccLogger.error(`Error getting MCP system prompt for ${serviceId}:`, error);
-          }
-      }
-
-      this.messages.push({
-          role: 'system',
-          content: systemPrompt
-      });
-      
-      ccLogger.debug('Final system prompt:', systemPrompt);
-      ccLogger.groupEnd();
+      return this.chatManager.addSystemPrompt();
     }
 
     // Modify postMessage helper method to use secure messaging

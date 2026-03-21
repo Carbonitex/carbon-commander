@@ -120,16 +120,21 @@
 
     async initialize() {
       try {
-        // Get the key from the script's data attribute
-        const script = document.currentScript;
-        if (!script) {
-          throw new Error('Script context not available');
-        }
-        
-        const keyBase64 = script.getAttribute('cc-data-key');
-        if (!keyBase64) {
-          throw new Error('Initialization key not found');
-        }
+        // Receive HMAC key via one-time MessageChannel (not from DOM attributes)
+        const keyBase64 = await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Key delivery timeout')), 5000);
+          window.addEventListener('message', function handler(event) {
+            if (event.data && event.data.type === 'CC_INIT_KEY' && event.ports.length > 0) {
+              window.removeEventListener('message', handler);
+              const port = event.ports[0];
+              port.onmessage = (e) => {
+                clearTimeout(timeout);
+                resolve(e.data.key);
+              };
+              port.start();
+            }
+          });
+        });
 
         const rawKey = Uint8Array.from(atob(keyBase64), c => c.charCodeAt(0));
         this.hmacKey = await crypto.subtle.importKey(

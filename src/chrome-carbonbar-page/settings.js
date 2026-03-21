@@ -42,11 +42,9 @@ export class Settings {
                     for (const [key, value] of settings.encryptedKeys) {
                         this.encryptedKeys.set(key, value);
                     }
-                    // Ensure openai-key and gemini-key are always encrypted and exists, mark as empty by default
-                    if (!this.encryptedKeys.has('openai-key'))
-                        this.encryptedKeys.set('openai-key', false);
-                    if (!this.encryptedKeys.has('gemini-key'))
-                        this.encryptedKeys.set('gemini-key', false);
+                    // Ensure openrouter-key is always in encrypted keys, mark as empty by default
+                    if (!this.encryptedKeys.has('openrouter-key'))
+                        this.encryptedKeys.set('openrouter-key', false);
                 }
             }
         }
@@ -76,33 +74,15 @@ export class Settings {
         }
     }
 
-    async testOpenAIKey(key) {
+    async testOpenRouterKey(key) {
         const response = await new Promise(resolve => {
             window.postMessage({
-                type: 'CARBON_SET_OPENAI_KEY',
+                type: 'CARBON_SET_OPENROUTER_KEY',
                 payload: { key: key, test: true }
             }, window.location.origin);
 
             const listener = (event) => {
-                if (event.data.type === 'SET_OPENAI_KEY_RESPONSE') {
-                    window.removeEventListener('message', listener);
-                    resolve(event.data.payload);
-                }
-            };
-            window.addEventListener('message', listener);
-        });
-        return response;
-    }
-
-    async testGeminiKey(key) {
-        const response = await new Promise(resolve => {
-            window.postMessage({
-                type: 'CARBON_SET_GEMINI_KEY',
-                payload: { key: key, test: true }
-            }, window.location.origin);
-
-            const listener = (event) => {
-                if (event.data.type === 'SET_GEMINI_KEY_RESPONSE') {
+                if (event.data.type === 'SET_OPENROUTER_KEY_RESPONSE') {
                     window.removeEventListener('message', listener);
                     resolve(event.data.payload);
                 }
@@ -145,18 +125,10 @@ export class Settings {
                                     value: value
                                 }
                             });
-                            if(key === 'openai-key') {
-                                ccLogger.debug('Setting OpenAI key:', value);
+                            if(key === 'openrouter-key') {
+                                ccLogger.debug('Setting OpenRouter key:', value);
                                 window.postMessage({
-                                    type: 'CARBON_SET_OPENAI_KEY',
-                                    payload: { key: value, save: true }
-                                }, window.location.origin);
-                            }
-
-                            if(key === 'gemini-key') {
-                                ccLogger.debug('Setting Gemini key:', value);
-                                window.postMessage({
-                                    type: 'CARBON_SET_GEMINI_KEY',
+                                    type: 'CARBON_SET_OPENROUTER_KEY',
                                     payload: { key: value, save: true }
                                 }, window.location.origin);
                             }
@@ -652,20 +624,11 @@ export class Settings {
                     const newValue = input.value.trim();
 
 
-                    if(key === 'openai-key') {
-                        const response = await this.testOpenAIKey(newValue);
+                    if(key === 'openrouter-key') {
+                        const response = await this.testOpenRouterKey(newValue);
                         if(!response.success) {
-                            alert('Invalid OpenAI key, test failed');
-                            ccLogger.error('Failed to set OpenAI key');
-                            return;
-                        }
-                    }
-
-                    if(key === 'gemini-key') {
-                        const response = await this.testGeminiKey(newValue);
-                        if(!response.success) {
-                            alert('Invalid Gemini key, test failed');
-                            ccLogger.error('Failed to set Gemini key');
+                            alert('Invalid OpenRouter key, test failed');
+                            ccLogger.error('Failed to set OpenRouter key');
                             return;
                         }
                     }
@@ -851,21 +814,11 @@ export class Settings {
                             if (value !== undefined && value !== null) {
                                 const trimmedValue = typeof value === 'string' ? value.trim() : value;
                                 if (trimmedValue !== '') {
-                                    // If this is the OpenAI key and it's being encrypted, test it first
-                                    if(key === 'openai-key') {
-                                        const response = await this.testOpenAIKey(trimmedValue);
+                                    if(key === 'openrouter-key') {
+                                        const response = await this.testOpenRouterKey(trimmedValue);
                                         if(!response.success) {
-                                            alert('Invalid OpenAI key, test failed');
-                                            ccLogger.error('Failed to set OpenAI key');
-                                            return;
-                                        }
-                                    }
-
-                                    if(key === 'gemini-key') {
-                                        const response = await this.testGeminiKey(trimmedValue);
-                                        if(!response.success) {
-                                            alert('Invalid Gemini key, test failed');
-                                            ccLogger.error('Failed to set Gemini key');
+                                            alert('Invalid OpenRouter key, test failed');
+                                            ccLogger.error('Failed to set OpenRouter key');
                                             return;
                                         }
                                     }

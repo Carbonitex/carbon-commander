@@ -71,57 +71,6 @@ async function initializeStorage() {
 
     // Send all initial values to the window
     try {
-    //  try {
-    //    const openaiKey = await CCLocalStorage.getEncrypted('openai-key');
-    //    if (openaiKey) {
-    //      // Send message to check and set OpenAI key
-    //      chrome.runtime.sendMessage(
-    //        { type: 'CARBON_SET_OPENAI_KEY', payload: { key: openaiKey } },
-    //        (response) => {
-    //          if (response && response.success) {
-    //            window.postMessage({
-    //              type: 'PROVIDER_STATUS_UPDATE',
-    //              provider: 'openai',
-    //              status: true
-    //            }, window.location.origin);
-    //          } else {
-    //            // If key validation fails, clean up settings
-    //            settings.encryptedKeys = settings.encryptedKeys?.filter(k => k !== 'openai-key') || [];
-    //            CCLocalStorage.removeEncrypted('openai-key');
-    //          }
-    //        }
-    //      );
-    //    }
-    //  } catch (error) {
-    //    ccLogger.error('Error checking OpenAI key:', error);
-    //  }
-
-
-    //try {
-    //    const geminiKey = await CCLocalStorage.getEncrypted('gemini-key');
-    //    if (geminiKey) {
-    //      // Send message to check and set Gemini key
-    //      chrome.runtime.sendMessage(
-    //        { type: 'CARBON_SET_GEMINI_KEY', payload: { key: geminiKey } },
-    //        (response) => {
-    //          if (response && response.success) {
-    //            window.postMessage({
-    //              type: 'PROVIDER_STATUS_UPDATE',
-    //              provider: 'gemini',
-    //              status: true
-    //            }, window.location.origin);
-    //          } else {
-    //            // If key validation fails, clean up settings
-    //            settings.encryptedKeys = settings.encryptedKeys?.filter(k => k !== 'gemini-key') || [];
-    //            CCLocalStorage.removeEncrypted('gemini-key');
-    //          }
-    //        }
-    //      );
-    //    }
-    //  } catch (error) {
-    //    ccLogger.error('Error checking Gemini key:', error);
-    //  }
-            
       window.postMessage({
         type: 'SET_KEYBIND',
         payload: keybind
@@ -156,16 +105,21 @@ function injectCarbonBar(file_path, tag) {
     // This window object is not the same at the page we inject into, its for the extension
     window.ccHMACKey = hmacKey;
 
-    // First inject the secure messaging script with the key
+    // Inject the secure messaging script WITHOUT the key in DOM attributes
     const secureMessagingScript = document.createElement('script');
     secureMessagingScript.setAttribute('type', 'text/javascript');
     secureMessagingScript.setAttribute('src', chrome.runtime.getURL('secure-messaging.js'));
-    ccLogger.debug('Injecting secure messaging script with key:', keyBase64);
-    secureMessagingScript.setAttribute('cc-data-key', keyBase64);
+    ccLogger.debug('Injecting secure messaging script');
     node.appendChild(secureMessagingScript);
 
-    // Initialize secure messaging after script loads
+    // Initialize secure messaging after script loads - deliver key via MessageChannel
     secureMessagingScript.onload = () => {
+      // Deliver HMAC key via one-time MessageChannel port (not visible in DOM)
+      const keyChannel = new MessageChannel();
+      window.postMessage({ type: 'CC_INIT_KEY' }, '*', [keyChannel.port2]);
+      keyChannel.port1.postMessage({ key: keyBase64 });
+      keyChannel.port1.close();
+
       // Inject the main carbonbar script
       ccLogger.debug('Injecting carbonbar script:', file_path, currentTabId);
       const script = document.createElement('script');
@@ -836,23 +790,17 @@ async function handleMessage(message, unprefixedType) {
                   reject(chrome.runtime.lastError);
                 } else if (defaultResponse) {
                   ccLogger.debug('Received response:', defaultResponse);
-                  // Special handling for Ollama availability check
+                  // Special handling for provider availability checks
                   if (unprefixedType === 'CHECK_OLLAMA_AVAILABLE') {
                     window.postMessage({
                       type: 'PROVIDER_STATUS_UPDATE',
                       provider: 'ollama',
                       status: defaultResponse.available
                     }, window.location.origin);
-                  } else if (unprefixedType === 'CHECK_OPENAI_AVAILABLE') {
+                  } else if (unprefixedType === 'CHECK_OPENROUTER_AVAILABLE') {
                     window.postMessage({
                       type: 'PROVIDER_STATUS_UPDATE',
-                      provider: 'openai',
-                      status: defaultResponse.available
-                    }, window.location.origin);
-                  } else if (unprefixedType === 'CHECK_GEMINI_AVAILABLE') {
-                    window.postMessage({
-                      type: 'PROVIDER_STATUS_UPDATE',
-                      provider: 'gemini',
+                      provider: 'openrouter',
                       status: defaultResponse.available
                     }, window.location.origin);
                   }

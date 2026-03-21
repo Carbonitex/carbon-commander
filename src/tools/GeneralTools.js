@@ -148,7 +148,7 @@ class GeneralTools {
     static GenerateImage = {
         function: {
             name: 'generate_image',
-            description: 'Generate an image using AI (OpenAI/Gemini)',
+            description: 'Generate an image using AI via OpenRouter',
             parameters: {
                 type: 'object',
                 properties: {
@@ -158,18 +158,18 @@ class GeneralTools {
                     },
                     size: {
                         type: 'string',
-                        description: 'Image size (256x256, 512x512, 1024x1024, or aspect ratios for Gemini)',
-                        enum: ['256x256', '512x512', '1024x1024', '1792x1024', '1024x1792'],
+                        description: 'Image size',
+                        enum: ['1024x1024', '1792x1024', '1024x1792'],
                         default: '1024x1024'
                     },
                     provider: {
                         type: 'string',
-                        description: 'The provider to use for image generation (openai or gemini)',
-                        enum: ['openai', 'gemini'],
+                        description: 'The provider to use for image generation',
+                        enum: ['openrouter'],
                     },
                     style: {
                         type: 'string',
-                        description: 'Image style (vivid or natural) - OpenAI only',
+                        description: 'Image style (vivid or natural)',
                         enum: ['vivid', 'natural'],
                         default: 'vivid'
                     }
@@ -682,7 +682,7 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
     static ManageKeyValue = {
         function: {
             name: 'manage_key_value',
-            description: 'Get or set key/value pairs for various services. Use this to manage API keys for OpenAI/Gemini and other any other kind of data.',
+            description: 'Get or set key/value pairs for various services. Use this to manage API keys for OpenRouter and other any other kind of data.',
             parameters: {
                 properties: {
                     action: {
@@ -692,7 +692,7 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
                     },
                     key_name: {
                         type: 'string',
-                        description: 'The name of the key to read or write (e.g. "openai-key", "gemini-key", etc)'
+                        description: 'The name of the key to read or write (e.g. "openrouter-key", etc)'
                     },
                     value: {
                         type: 'string',
@@ -760,17 +760,10 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
                     };
                 }
 
-                if (key_name === 'openai-key') {
-                    // Use the existing SetOpenAIKey tool's functionality
-                    return await CarbonBarHelpTools.SetOpenAIKey.execute(scope, { key: value });
+                if (key_name === 'openrouter-key') {
+                    return await CarbonBarHelpTools.SetOpenRouterKey.execute(scope, { key: value });
                 }
 
-                if (key_name === 'gemini-key') {
-                    // Use the existing SetGeminiKey tool's functionality
-                    return await CarbonBarHelpTools.SetGeminiKey.execute(scope, { key: value });
-                }
-
-                // For future key types, add handling here
                 return {
                     success: false,
                     error: `Unsupported key_name: ${key_name}`

@@ -2,8 +2,7 @@ import AICaller from './external-services/caller.js';
 
 
 let currentToolResolvePromise = null;
-let setOpenAIKeyIndex = 0;
-let setGeminiKeyIndex = 0;
+let setOpenRouterKeyIndex = 0;
 
 const ccLogMessage = (...args) => {
     console.log('[CCSW]', ...args);
@@ -17,13 +16,12 @@ const ccLogError = (...args) => {
 function toggleCarbonBar() {
     window.postMessage({ type: "TOGGLE_CARBONBAR" }, "*");
 }
-  
+
 // Optional: Handle extension installation/updates
 chrome.runtime.onInstalled.addListener(() => {
     ccLogMessage('CarbonCommander installed/updated');
-    // You could initialize any extension settings here
 });
-  
+
 chrome.action.onClicked.addListener((tab) => {
     chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -53,8 +51,7 @@ function sendMessageToTab(tabId, authToken, type, payload) {
 const toolCaller = async (tabId, authToken, tool) => {
   try {
     ccLogMessage('toolCaller', tool);
-    
-    // Send message to content script
+
     const tab = await chrome.tabs.get(tabId).catch(() => null);
     if (!tab) {
         throw new Error('Tab no longer exists');
@@ -70,7 +67,6 @@ const toolCaller = async (tabId, authToken, tool) => {
     const result = await currentToolPromise;
     if(!result.success) {
       ccLogMessage('toolCallerResult1', result, tool);
-      //throw new Error(JSON.stringify(result));
     }
 
     const response = {
@@ -78,7 +74,6 @@ const toolCaller = async (tabId, authToken, tool) => {
         tool_call_id: tool.id
     };
     ccLogMessage('toolCallerResult2', response, tool, result);
-    // Add tool ID to the response
     return response;
   } catch (error) {
     ccLogError('Error in toolCaller:', error);
@@ -88,7 +83,6 @@ const toolCaller = async (tabId, authToken, tool) => {
 
 async function handleAIRequest(tabId, authToken, request) {
     try {
-        // Check if tab exists before proceeding
         const tab = await chrome.tabs.get(tabId).catch(() => null);
         if (!tab) {
             throw new Error('Tab no longer exists');
@@ -116,7 +110,6 @@ async function handleAIRequest(tabId, authToken, request) {
             request.keepAlive
         );
 
-        // Send final chunk to indicate completion
         sendMessageToTab(tabId, authToken, 'AI_CHUNK_RESPONSE', {
             content: '',
             isFinished: true,
@@ -128,7 +121,6 @@ async function handleAIRequest(tabId, authToken, request) {
         ccLogError('Error in AI request:', error.message, error.details);
         var messages = [...request.messages];
         messages.push({ role: 'assistant', content: error.message });
-        // Send error message to tab
         sendMessageToTab(tabId, authToken, 'AI_ERROR_RESPONSE', {
             content: error.message,
             isFinished: true,
@@ -162,33 +154,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    if (unprefixedType === 'CHECK_OPENAI_AVAILABLE') {
+    if (unprefixedType === 'CHECK_OPENROUTER_AVAILABLE') {
         try {
-            ccLogMessage('Checking OpenAI availability');
-            AICaller.openai.isAvailable().then(isAvailable => {
+            ccLogMessage('Checking OpenRouter availability');
+            AICaller.openrouter.isAvailable().then(isAvailable => {
                 sendResponse({ available: isAvailable, noAIMode: message.payload?.noAIMode });
-            }).catch(error => { 
-                ccLogError('Error checking OpenAI:', error);
+            }).catch(error => {
+                ccLogError('Error checking OpenRouter:', error);
                 sendResponse({ available: false });
             });
         } catch (error) {
-            ccLogError('Error checking OpenAI:', error);
-            sendResponse({ available: false });
-        }
-        return true;
-    }
-
-    if (unprefixedType === 'CHECK_GEMINI_AVAILABLE') {
-        try {
-            ccLogMessage('Checking Gemini availability');
-            AICaller.gemini.isAvailable().then(isAvailable => {
-                sendResponse({ available: isAvailable, noAIMode: message.payload?.noAIMode });
-            }).catch(error => { 
-                ccLogError('Error checking Gemini:', error);
-                sendResponse({ available: false });
-            });
-        } catch (error) {
-            ccLogError('Error checking Gemini:', error);
+            ccLogError('Error checking OpenRouter:', error);
             sendResponse({ available: false });
         }
         return true;
@@ -211,7 +187,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    // Add handler for confirmation dialog responses
     if (unprefixedType === 'CONFIRMATION_DIALOG_RESPONSE') {
         ccLogMessage('Received CONFIRMATION_DIALOG_RESPONSE', message.payload);
         if (currentToolResolvePromise) {
@@ -221,7 +196,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    // Add handler for input dialog responses
     if (unprefixedType === 'INPUT_DIALOG_RESPONSE') {
         ccLogMessage('Received INPUT_DIALOG_RESPONSE', message.payload);
         if (currentToolResolvePromise) {
@@ -241,14 +215,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 ccLogError('Error:', error);
                 sendResponse({ error: error.message || 'Unknown error' });
             });
-        return true; // Keep message channel open
+        return true;
     }
 
 
 
     if (unprefixedType === 'CB_GET_AUTOCOMPLETE') {
         const { input, commandHistory, context } = message.payload;
-        
+
         AICaller.autocompleteSuggestions(input, commandHistory, context)
             .then(suggestion => {
                 sendResponse(suggestion);
@@ -260,46 +234,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    if (unprefixedType === 'SET_OPENAI_KEY') {
+    if (unprefixedType === 'SET_OPENROUTER_KEY') {
         (async () => {
-            setOpenAIKeyIndex++;
-            ccLogMessage('SET_OPENAI_KEY2', message.payload);
+            setOpenRouterKeyIndex++;
+            ccLogMessage('SET_OPENROUTER_KEY', message.payload);
             try {
-                const success = await AICaller.setOpenAIKey(message.payload.key, message.payload.test, message.payload.save);
+                const success = await AICaller.setOpenRouterKey(message.payload.key, message.payload.test, message.payload.save);
                 if (success && !message.payload.test) {
-                    // Send provider status update
                     chrome.tabs.sendMessage(sender.tab.id, {
                         type: 'PROVIDER_STATUS_UPDATE',
-                        provider: 'openai',
+                        provider: 'openrouter',
                         status: true
                     });
                 }
                 sendResponse({ success });
             } catch (error) {
-                ccLogError('Error setting OpenAI key:', error);
-                sendResponse({ success: false, error: error.message });
-            }
-        })();
-        return true;
-    }
-
-    if (unprefixedType === 'SET_GEMINI_KEY') {
-        (async () => {
-            setGeminiKeyIndex++;
-            ccLogMessage('SET_GEMINI_KEY2', message.payload);
-            try {
-                const success = await AICaller.setGeminiKey(message.payload.key, message.payload.test, message.payload.save);
-                if (success && !message.payload.test) {
-                    // Send provider status update
-                    chrome.tabs.sendMessage(sender.tab.id, {
-                        type: 'PROVIDER_STATUS_UPDATE',
-                        provider: 'gemini',
-                        status: true
-                    });
-                }
-                sendResponse({ success });
-            } catch (error) {
-                ccLogError('Error setting Gemini key:', error);
+                ccLogError('Error setting OpenRouter key:', error);
                 sendResponse({ success: false, error: error.message });
             }
         })();
@@ -317,43 +267,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (unprefixedType === 'CB_IMAGE_GENERATION') {
         const { requestId, prompt, size, n, provider, style } = message.payload;
-        
+
         ccLogMessage('Received image generation request:', message.payload);
-        
-        // Determine which provider to use
+
         let imageProvider = provider || AICaller.defaultProvider;
         if (imageProvider === 'ollama') {
-            // Ollama doesn't support image generation, fall back to a different provider
-            if (AICaller.openai.isAvailable()) {
-                imageProvider = 'openai';
-            } else if (AICaller.gemini.isAvailable()) {
-                imageProvider = 'gemini';
+            if (AICaller.openrouter.isAvailable()) {
+                imageProvider = 'openrouter';
             } else {
-                // No available image generation provider
                 chrome.tabs.sendMessage(sender.tab.id, {
                     type: 'CARBON_IMAGE_GENERATION_RESPONSE',
                     payload: {
                         requestId,
-                        error: 'No available image generation provider. Please set up OpenAI or Gemini.'
+                        error: 'No available image generation provider. Please set up OpenRouter.'
                     }
                 });
                 sendResponse({ success: false });
                 return true;
             }
         }
-        
-        // For OpenAI, pass the style parameter
+
         let model = null;
-        const options = {};
-        if (imageProvider === 'openai' && style) {
-            options.style = style;
-        }
-        
-        // Generate the image using the AICaller
+
         AICaller.generateImage(prompt, size, n, model, imageProvider)
             .then(results => {
                 ccLogMessage('Image generation successful:', results);
-                
+
                 const payload = {
                     success: true,
                     requestId,
@@ -361,19 +300,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     isBase64: !!results[0].b64_json,
                     all_results: results
                 };
-                
 
-                // Send results back to the content script
-                //chrome.tabs.sendMessage(sender.tab.id, {
-                //    type: 'CARBON_IMAGE_GENERATION_RESPONSE',
-                //    payload: {
-                //        requestId,
-                //        result: results[0].url || results[0].b64_json,
-                //        isBase64: !!results[0].b64_json,
-                //        all_results: results
-                //    }
-                //});
-                
                 sendResponse(payload);
             })
             .catch(error => {
@@ -383,62 +310,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     requestId,
                     error: error.message || 'Unknown error generating image'
                 };
-                // Send error back to the content script
-                //chrome.tabs.sendMessage(sender.tab.id, {
-                //    type: 'CARBON_IMAGE_GENERATION_RESPONSE',
-                //    payload: {
-                //        requestId,
-                //        error: error.message || 'Unknown error generating image'
-                //    }
-                //});
-                
+
                 sendResponse(payload);
             });
-        
+
         return true;
     }
 
     if (unprefixedType === 'TOGGLE_PROVIDER') {
         const { provider, enabled } = message.payload;
-        if (provider === 'openai') {
+        if (provider === 'openrouter') {
             if (!enabled) {
-                // Temporarily disable OpenAI
-                AICaller.disableProvider('openai');
+                AICaller.disableProvider('openrouter');
                 chrome.tabs.sendMessage(sender.tab.id, {
                     type: 'PROVIDER_STATUS_UPDATE',
-                    provider: 'openai',
+                    provider: 'openrouter',
                     status: false
                 });
             } else {
-                // Re-enable OpenAI if we have a key
-                AICaller.enableProvider('openai');
+                AICaller.enableProvider('openrouter');
                 chrome.tabs.sendMessage(sender.tab.id, {
                     type: 'PROVIDER_STATUS_UPDATE',
-                    provider: 'openai',
+                    provider: 'openrouter',
                     status: true
                 });
             }
         }
 
-        if (provider === 'gemini') {
-            if (!enabled) {
-                AICaller.disableProvider('gemini');
-                chrome.tabs.sendMessage(sender.tab.id, {
-                    type: 'PROVIDER_STATUS_UPDATE',
-                    provider: 'gemini',
-                    status: false
-                });
-            } else {
-                // Re-enable Gemini if we have a key
-                AICaller.enableProvider('gemini');
-                chrome.tabs.sendMessage(sender.tab.id, {
-                    type: 'PROVIDER_STATUS_UPDATE',
-                    provider: 'gemini',
-                    status: true
-                });
-            }
-        }
-        
         sendResponse({ success: true });
         return true;
     }

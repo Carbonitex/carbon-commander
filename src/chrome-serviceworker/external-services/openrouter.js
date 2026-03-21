@@ -1,86 +1,90 @@
 import CCLocalStorage from '../local-storage.js';
 import { ccLogger } from '../../global.js';
 
-class OpenAIClient {
-    static FAST_MODEL = "gpt-4o-mini";
-    static REASON_MODEL = "o3-mini";
-    static VISION_MODEL = "gpt-4-vision-preview";
+class OpenRouterClient {
+    static FAST_MODEL = "openai/gpt-4o-mini";
+    static REASON_MODEL = "anthropic/claude-sonnet-4";
+    static VISION_MODEL = "openai/gpt-4o";
     static IMAGE_MODEL = "dall-e-3";
     static isAvailable = null;
 
     constructor() {
         this.apiKey = '';
-        this.defaultModel = OpenAIClient.FAST_MODEL;
+        this.defaultModel = OpenRouterClient.FAST_MODEL;
+        this.baseUrl = 'https://openrouter.ai/api/v1';
     }
 
     setApiKey(key, save = false) {
-        ccLogger.debug('Setting OpenAI API key', save);
+        ccLogger.debug('Setting OpenRouter API key', save);
         this.apiKey = key;
-        OpenAIClient.isAvailable = (key && key.length > 0);
+        OpenRouterClient.isAvailable = (key && key.length > 0);
         if(save) {
-            CCLocalStorage.setEncrypted('openai-key', key);
+            CCLocalStorage.setEncrypted('openrouter-key', key);
         }
     }
 
     async isAvailable() {
-        if(OpenAIClient.isAvailable == null) {
+        if(OpenRouterClient.isAvailable == null) {
             try {
-                // Get the key from the new encrypted storage location
-                const key = await CCLocalStorage.getEncrypted('openai-key');
-                
-                OpenAIClient.isAvailable = (key && key.length > 0);
-                if(OpenAIClient.isAvailable) {
+                const key = await CCLocalStorage.getEncrypted('openrouter-key');
+
+                OpenRouterClient.isAvailable = (key && key.length > 0);
+                if(OpenRouterClient.isAvailable) {
                     this.apiKey = key;
-                    ccLogger.info('OpenAI is available and configured');
+                    ccLogger.info('OpenRouter is available and configured');
                 } else {
-                    ccLogger.warn('OpenAI is not available - no API key found');
+                    ccLogger.warn('OpenRouter is not available - no API key found');
                 }
             } catch (error) {
-                ccLogger.error('Error checking OpenAI availability:', error);
-                OpenAIClient.isAvailable = false;
+                ccLogger.error('Error checking OpenRouter availability:', error);
+                OpenRouterClient.isAvailable = false;
                 this.apiKey = '';
             }
         }
-        return OpenAIClient.isAvailable;
+        return OpenRouterClient.isAvailable;
     }
 
     async testKey(key) {
-        ccLogger.group('Testing OpenAI API Key');
+        ccLogger.group('Testing OpenRouter API Key');
         try {
-            const response = await fetch('https://api.openai.com/v1/models', {
+            const response = await fetch(`${this.baseUrl}/models`, {
                 headers: {
-                    'Authorization': `Bearer ${key}`
+                    'Authorization': `Bearer ${key}`,
+                    'HTTP-Referer': 'https://carbonbar.app',
+                    'X-Title': 'Carbon Commander'
                 }
             });
-            
+
             if (!response.ok) {
                 const error = await response.json();
                 throw new Error(error.error?.message || 'Invalid API key');
             }
-            
+
             const data = await response.json();
             const isValid = data.data && data.data.length > 0;
             ccLogger.info('API key test result:', isValid ? 'Valid' : 'Invalid');
             ccLogger.groupEnd();
             return isValid;
         } catch (error) {
-            ccLogger.error('OpenAI key test failed:', error);
+            ccLogger.error('OpenRouter key test failed:', error);
             ccLogger.groupEnd();
-            throw new Error(`Invalid OpenAI key: ${error.message}`);
+            throw new Error(`Invalid OpenRouter key: ${error.message}`);
         }
     }
 
     async getHttpClient() {
         return {
-            timeout: 5 * 60 * 1000 // 5 minutes
+            timeout: 5 * 60 * 1000
         };
     }
 
     async getModelsList() {
-        ccLogger.debug('Fetching OpenAI models list');
-        const response = await fetch('https://api.openai.com/v1/models', {
+        ccLogger.debug('Fetching OpenRouter models list');
+        const response = await fetch(`${this.baseUrl}/models`, {
             headers: {
-                'Authorization': `Bearer ${this.apiKey}`
+                'Authorization': `Bearer ${this.apiKey}`,
+                'HTTP-Referer': 'https://carbonbar.app',
+                'X-Title': 'Carbon Commander'
             }
         });
         const data = await response.json();
@@ -119,7 +123,7 @@ class OpenAIClient {
     }
 
     async chatCompletion(messages, chunkedOutput, model, toolCaller = null, tools = null, temp = 0.9) {
-        ccLogger.group('OpenAI Chat Completion');
+        ccLogger.group('OpenRouter Chat Completion');
         const startTime = Date.now();
         let output = '';
 
@@ -162,7 +166,7 @@ class OpenAIClient {
                             }
                         }]
                     });
-                    
+
                     ccLogger.debug('Calling tool:', toolCall.function.name);
                     const parsedArgs = JSON.parse(toolCall.function.arguments);
                     const toolCallerResult = await toolCaller({ id: toolCall.id, name: toolCall.function.name, arguments: parsedArgs });
@@ -204,7 +208,6 @@ class OpenAIClient {
                             content = 'An unknown error occurred.';
                         }
 
-
                         messages.push({
                             role: 'tool',
                             tool_call_id: toolCall.id,
@@ -237,7 +240,7 @@ class OpenAIClient {
     }
 
     async chatCompletionUnwrapped(messages, outputToken, model, toolCaller = null, tools = null, temp = 0.9, stream = true) {
-        ccLogger.group('OpenAI Chat Completion Unwrapped');
+        ccLogger.group('OpenRouter Chat Completion Unwrapped');
         model = model || this.defaultModel;
 
         ccLogger.debug('Request configuration:', {
@@ -274,11 +277,13 @@ class OpenAIClient {
         };
 
         try {
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            const response = await fetch(`${this.baseUrl}/chat/completions`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${this.apiKey}`,
+                    'HTTP-Referer': 'https://carbonbar.app',
+                    'X-Title': 'Carbon Commander',
                     'Accept': stream ? 'text/event-stream' : 'application/json',
                 },
                 body: JSON.stringify(request)
@@ -286,13 +291,13 @@ class OpenAIClient {
 
             if (!response.ok) {
                 const error = await response.json();
-                throw new Error(`OpenAI API Error: ${error.error?.message || 'Unknown error'}`);
+                throw new Error(`OpenRouter API Error: ${error.error?.message || 'Unknown error'}`);
             }
 
             if (!stream) {
                 const data = await response.json();
                 if (!data.choices?.[0]?.message) {
-                    throw new Error('Invalid response format from OpenAI API');
+                    throw new Error('Invalid response format from OpenRouter API');
                 }
                 const content = data.choices[0].message.content;
                 outputToken(content);
@@ -331,7 +336,7 @@ class OpenAIClient {
                         const finishReason = data.choices[0]?.finish_reason;
                         if (delta.tool_calls) {
                             const toolCall = delta.tool_calls[0];
-                            
+
                             if (toolCall.index !== undefined) {
                                 if (!toolCalls[toolCall.index]) {
                                     toolCalls[toolCall.index] = {
@@ -380,7 +385,7 @@ class OpenAIClient {
                             output += delta.content;
                             outputToken(delta.content);
                         }
-                        
+
                         if (finishReason) {
                             if (toolCalls.length > 0) {
                                 for(var toolCall of toolCalls) {
@@ -405,7 +410,7 @@ class OpenAIClient {
                 }
             }
         } catch (error) {
-            ccLogger.error('OpenAI API Error:', error);
+            ccLogger.error('OpenRouter API Error:', error);
             ccLogger.groupEnd();
             throw error;
         }
@@ -414,18 +419,16 @@ class OpenAIClient {
     }
 
     async generateImage(prompt, size = '1024x1024', n = 1, model = null) {
-        ccLogger.group('OpenAI Image Generation');
-        model = model || OpenAIClient.IMAGE_MODEL;
+        ccLogger.group('OpenRouter Image Generation');
+        model = model || 'openai/dall-e-3';
 
-        model = 'dall-e-3';
-        
-        if (model === 'dall-e-3' && n > 1) {
+        if (n > 1) {
             ccLogger.warn('DALL-E 3 only supports n=1. Setting n=1.');
             n = 1;
         }
-        if (model === 'dall-e-3' && !['1024x1024', '1792x1024', '1024x1792'].includes(size)) {
-             ccLogger.warn(`DALL-E 3 only supports sizes 1024x1024, 1792x1024, 1024x1792. Defaulting to 1024x1024.`);
-             size = '1024x1024';
+        if (!['1024x1024', '1792x1024', '1024x1792'].includes(size)) {
+            ccLogger.warn(`Size ${size} not supported. Defaulting to 1024x1024.`);
+            size = '1024x1024';
         }
 
         const request = {
@@ -444,31 +447,33 @@ class OpenAIClient {
         });
 
         try {
-            const response = await fetch('https://api.openai.com/v1/images/generations', {
+            const response = await fetch(`${this.baseUrl}/images/generations`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.apiKey}`
+                    'Authorization': `Bearer ${this.apiKey}`,
+                    'HTTP-Referer': 'https://carbonbar.app',
+                    'X-Title': 'Carbon Commander'
                 },
                 body: JSON.stringify(request)
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
-                ccLogger.error('OpenAI Image API Error Response:', errorData);
-                throw new Error(`OpenAI API Error: ${errorData.error?.message || response.statusText}`);
+                ccLogger.error('OpenRouter Image API Error Response:', errorData);
+                throw new Error(`OpenRouter API Error: ${errorData.error?.message || response.statusText}`);
             }
 
             const result = await response.json();
             ccLogger.info(`Image generation successful. Received ${result.data?.length || 0} images.`);
             ccLogger.groupEnd();
-            return result.data; 
+            return result.data;
         } catch (error) {
-            ccLogger.error('OpenAI Image Generation Failed:', error);
+            ccLogger.error('OpenRouter Image Generation Failed:', error);
             ccLogger.groupEnd();
             throw error;
         }
     }
 }
 
-export default new OpenAIClient(); 
+export default new OpenRouterClient();

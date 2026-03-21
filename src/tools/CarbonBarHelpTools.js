@@ -7,8 +7,7 @@ class CarbonBarHelpTools {
 
     static GetNoAIModeToolInfo() {
         return [
-            CarbonBarHelpTools.SetOpenAIKey.function,
-            CarbonBarHelpTools.SetGeminiKey.function,
+            CarbonBarHelpTools.SetOpenRouterKey.function,
             CarbonBarHelpTools.CheckOllamaStatus.function,
             CarbonBarHelpTools.GetSetupGuide.function,
             CarbonBarHelpTools.GetUsageGuide.function,
@@ -29,8 +28,7 @@ class CarbonBarHelpTools {
 
 ## Setup Guides
 Use \`get_setup_guide [topic]\` with:
-- \`openai\` - OpenAI API setup and configuration
-- \`gemini\` - Gemini API setup and configuration
+- \`openrouter\` - OpenRouter API setup and configuration
 - \`ollama\` - Ollama local AI setup and configuration
 - \`mcp\` - MCP service setup and integration
 - \`general\` - General setup and configuration overview
@@ -43,19 +41,16 @@ Use \`get_usage_guide [topic]\` with:
 - \`general\` - Quick start and overview
 
 ## Examples
-1. Get OpenAI setup instructions:
-   \`get_setup_guide openai\`
+1. Get OpenRouter setup instructions:
+   \`get_setup_guide openrouter\`
 
-2. Get Gemini setup instructions:
-   \`get_setup_guide gemini\`
-
-3. Learn about keyboard shortcuts:
+2. Learn about keyboard shortcuts:
    \`get_usage_guide keybinds\`
 
-4. Set up MCP services:
+3. Set up MCP services:
    \`get_setup_guide mcp\`
 
-5. Get general usage overview:
+4. Get general usage overview:
    \`get_usage_guide general\`
 
 ## Additional Help
@@ -65,8 +60,7 @@ Use \`get_usage_guide [topic]\` with:
 - Use \`mcp connect\` to add services
 
 ## Quick Links
-- [OpenAI Platform](https://platform.openai.com)
-- [Gemini Platform](https://aistudio.google.com/app/apikey)
+- [OpenRouter](https://openrouter.ai)
 - [Ollama Website](https://ollama.ai)
 - [Chrome Extensions](chrome://extensions)`;
 
@@ -77,12 +71,12 @@ Use \`get_usage_guide [topic]\` with:
     static GetSetupGuide = {
         function: {
             name: 'get_setup_guide',
-            description: 'Get detailed setup instructions for OpenAI, Gemini, Ollama, and MCP',
+            description: 'Get detailed setup instructions for OpenRouter, Ollama, and MCP',
             parameters: {
                 properties: {
                     topic: {
                         type: 'string',
-                        description: 'The specific setup topic (openai, gemini, ollama, mcp, or general). Use list_guides to see all available guides.'
+                        description: 'The specific setup topic (openrouter, ollama, mcp, or general). Use list_guides to see all available guides.'
                     }
                 },
                 required: ['topic']
@@ -93,20 +87,25 @@ Use \`get_usage_guide [topic]\` with:
             let guide = '';
 
             switch(topic.toLowerCase()) {
-                case 'openai':
-                    guide = `# Setting up OpenAI
+                case 'openrouter':
+                    guide = `# Setting up OpenRouter
 
-1. Visit [OpenAI's platform](https://platform.openai.com/signup)
+1. Visit [OpenRouter](https://openrouter.ai)
 2. Create an account or sign in
-3. Go to [API Keys](https://platform.openai.com/api-keys)
-4. Click "Create new secret key"
+3. Go to your API Keys page
+4. Click "Create new key"
 5. Copy your API key
-6. Use the command: \`set openai-key YOUR_API_KEY\`
+6. Use the command: \`set openrouter-key YOUR_API_KEY\`
+
+## About OpenRouter
+- Access many AI models through a single API key
+- Supports OpenAI, Anthropic, Google, and many more models
+- Pay-per-use pricing across all models
 
 ## Additional Configuration
 - API key is stored securely and encrypted
 - Key can be updated any time with the same command
-- Use \`disconnect openai\` to remove the key
+- Use \`disconnect openrouter\` to remove the key
 
 ## Troubleshooting
 - Ensure your API key is valid and has sufficient credits
@@ -116,38 +115,7 @@ Use \`get_usage_guide [topic]\` with:
 ## Tips
 - Keep your API key secure and never share it
 - Regularly rotate your API keys for security
-- Monitor your API usage on OpenAI's platform
-
-Need more help? Try:
-- \`get_usage_guide general\` for general usage
-- \`list_guides\` to see all available guides
-- \`check-ollama\` to verify Ollama status`;
-                    break;
-
-                case 'gemini':
-                    guide = `# Setting up Gemini
-
-1. Visit [Gemini Platform](https://aistudio.google.com/app/apikey)
-2. Create an account or sign in
-3. Go to [API Keys](https://aistudio.google.com/app/apikey)
-4. Click "Create new secret key"
-5. Copy your API key
-6. Use the command: \`set gemini-key YOUR_API_KEY\`
-
-## Additional Configuration
-- API key is stored securely and encrypted
-- Key can be updated any time with the same command
-- Use \`disconnect gemini\` to remove the key
-
-## Troubleshooting
-- Ensure your API key is valid and has sufficient credits
-- Check connection status in the status badges
-- If issues persist, try disconnecting and reconnecting
-
-## Tips
-- Keep your API key secure and never share it
-- Regularly rotate your API keys for security
-- Monitor your API usage on Gemini's platform
+- Monitor your API usage on OpenRouter's dashboard
 
 Need more help? Try:
 - \`get_usage_guide general\` for general usage
@@ -234,38 +202,6 @@ MCP allows you to extend Carbon Commander with external AI services and tools.
 2. **Disconnect Service**:
    \`mcp disconnect my-service\`
 
-## Creating an MCP Service
-Required endpoints:
-\`\`\`javascript
-GET  /discover-tools    // List available tools
-POST /execute          // Execute tool function
-GET  /status           // Service status
-
-// Optional endpoints
-POST /build-scope      // Custom tool scope
-POST /system-prompt    // Enhance prompts
-\`\`\`
-
-## Example Service Definition
-\`\`\`javascript
-{
-  name: "email-tools",
-  tools: [{
-    name: "send-email",
-    description: "Send email via MCP",
-    parameters: {
-      type: "object",
-      properties: {
-        to: { type: "string" },
-        subject: { type: "string" },
-        body: { type: "string" }
-      },
-      required: ["to", "subject", "body"]
-    }
-  }]
-}
-\`\`\`
-
 ## Security Best Practices
 1. Use HTTPS for all connections
 2. Implement proper authentication
@@ -284,17 +220,6 @@ POST /system-prompt    // Enhance prompts
    - Check tool definitions
    - Monitor browser console
 
-3. **Execution Problems**:
-   - Validate parameters
-   - Check error responses
-   - Verify tool implementation
-
-## Tips
-- Use autoConnect for reliability
-- Implement error handling
-- Monitor tool performance
-- Keep services updated
-
 Need more help? Try:
 - \`get_usage_guide tools\` for tool usage
 - \`list_guides\` for all guides
@@ -307,30 +232,24 @@ Need more help? Try:
 ## Quick Start
 1. Install the extension
 2. Configure providers:
-   - OpenAI for advanced features (\`get_setup_guide openai\`)
-   - Gemini for advanced features (\`get_setup_guide gemini\`)
+   - OpenRouter for cloud AI (\`get_setup_guide openrouter\`)
    - Ollama for local processing (\`get_setup_guide ollama\`)
    - MCP for external services (\`get_setup_guide mcp\`)
 3. Customize keyboard shortcuts
 4. Start using commands
 
 ## AI Provider Setup
-1. **OpenAI (Recommended)**
-   - Get API key: \`get_setup_guide openai\`
-   - Set key: \`set openai-key YOUR_KEY\`
+1. **OpenRouter (Recommended)**
+   - Get API key: \`get_setup_guide openrouter\`
+   - Set key: \`set openrouter-key YOUR_KEY\`
    - Check status in badges
 
-2. **Gemini (Optional)**
-   - Get API key: \`get_setup_guide gemini\`
-   - Set key: \`set gemini-key YOUR_KEY\`
-   - Check status in badges
-
-3. **Ollama (Optional)**
+2. **Ollama (Optional)**
    - Install locally: \`get_setup_guide ollama\`
    - Runs automatically when detected
    - Provides faster local processing
 
-4. **MCP Services (Optional)**
+3. **MCP Services (Optional)**
    - Connect services: \`mcp connect [service-id] [endpoint]\`
    - View status in badges
    - Use service-specific tools
@@ -343,15 +262,15 @@ Need more help? Try:
    - Or use Chrome settings
 
 ## Verification
-1. Check OpenAI/Gemini:
+1. Check OpenRouter:
    - Look for green status badge
    - Try a simple command
 
-3. Check Ollama:
+2. Check Ollama:
    - Use \`check-ollama\` command
    - Verify status badge
 
-4. Check MCP:
+3. Check MCP:
    - Look for service badges
    - Try service-specific tools
 
@@ -362,8 +281,7 @@ Need more help? Try:
 4. Configure AI providers
 
 Need more details? Try:
-- \`get_setup_guide openai\` for OpenAI setup
-- \`get_setup_guide gemini\` for Gemini setup
+- \`get_setup_guide openrouter\` for OpenRouter setup
 - \`get_setup_guide ollama\` for Ollama setup
 - \`get_setup_guide mcp\` for MCP setup
 - \`get_usage_guide general\` for usage help
@@ -371,12 +289,11 @@ Need more details? Try:
                     break;
 
                 default:
-                    return { 
-                        success: false, 
+                    return {
+                        success: false,
                         result: "Invalid topic. Available guides:\n\n" +
                                "1. Setup Guides (use get_setup_guide):\n" +
-                               "   - openai: OpenAI configuration\n" +
-                               "   - gemini: Gemini configuration\n" +
+                               "   - openrouter: OpenRouter configuration\n" +
                                "   - ollama: Ollama setup\n" +
                                "   - mcp: MCP service setup\n" +
                                "   - general: Overall setup\n\n" +
@@ -403,18 +320,18 @@ Need more details? Try:
             try {
                 const response = await fetch('http://localhost:11434/api/tags');
                 const data = await response.json();
-                
+
                 if (data) {
-                    return { 
-                        success: true, 
-                        result: "✅ Ollama is running and accessible.\n\nAvailable models:\n" + 
-                               data.models?.map(m => `- ${m.name}`).join('\n') 
+                    return {
+                        success: true,
+                        result: "Ollama is running and accessible.\n\nAvailable models:\n" +
+                               data.models?.map(m => `- ${m.name}`).join('\n')
                     };
                 }
             } catch (error) {
-                return { 
-                    success: false, 
-                    result: "❌ Ollama is not accessible. Common issues:\n\n" +
+                return {
+                    success: false,
+                    result: "Ollama is not accessible. Common issues:\n\n" +
                            "1. Ollama is not installed\n" +
                            "2. Ollama service is not running\n" +
                            "3. OLLAMA_ORIGINS is not set (macOS)\n\n" +
@@ -424,15 +341,15 @@ Need more details? Try:
         }
     };
 
-    static SetOpenAIKey = {
+    static SetOpenRouterKey = {
         function: {
-            name: 'set_openai_key',
-            description: 'Set the OpenAI key',
+            name: 'set_openrouter_key',
+            description: 'Set the OpenRouter key',
             parameters: {
                 properties: {
                     key: {
                         type: 'string',
-                        description: 'The OpenAI key'
+                        description: 'The OpenRouter key'
                     }
                 },
                 required: ['key']
@@ -440,77 +357,29 @@ Need more details? Try:
         },
         execute: async function(scope, args) {
             const { key } = args;
-            scope.logMessage('set_openai_key', key);
+            scope.logMessage('set_openrouter_key', key);
             return new Promise((resolve, reject) => {
                 window.postMessage({
-                    type: 'CARBON_SET_OPENAI_KEY',
+                    type: 'CARBON_SET_OPENROUTER_KEY',
                     payload: {
                         key: key,
                         save: true
                     }
                 }, window.location.origin);
 
-                const listener = (event) => {   
-                    if (event.data.type === 'CARBON_SET_OPENAI_KEY_RESPONSE') {
+                const listener = (event) => {
+                    if (event.data.type === 'CARBON_SET_OPENROUTER_KEY_RESPONSE') {
                         const payload = event.data.payload?.payload || event.data.payload;
-                        scope.logMessage('CARBON_SET_OPENAI_KEY_RESPONSE', event.data, payload);
+                        scope.logMessage('CARBON_SET_OPENROUTER_KEY_RESPONSE', event.data, payload);
                         if(payload.success === true){
                             window.postMessage({
                                 type: 'PROVIDER_STATUS_UPDATE',
-                                provider: 'openai',
+                                provider: 'openrouter',
                                 status: true
                             }, window.location.origin);
-                            resolve({success: true, content: 'OpenAI key set successfully'});
+                            resolve({success: true, content: 'OpenRouter key set successfully'});
                         }else{
-                            resolve({success: false, content: 'Failed to set OpenAI key'});
-                        }
-                        window.removeEventListener('message', listener);
-                    }
-                };
-                window.addEventListener('message', listener);
-            });
-        }
-    };
-
-    static SetGeminiKey = {
-        function: {
-            name: 'set_gemini_key',
-            description: 'Set the Gemini key',
-            parameters: {
-                properties: {
-                    key: {
-                        type: 'string',
-                        description: 'The Gemini key'
-                    }
-                },
-                required: ['key']
-            }
-        },
-        execute: async function(scope, args) {
-            const { key } = args;
-            scope.logMessage('set_gemini_key', key);
-            return new Promise((resolve, reject) => {
-                window.postMessage({
-                    type: 'CARBON_SET_GEMINI_KEY',
-                    payload: {
-                        key: key,
-                        save: true
-                    }
-                }, window.location.origin);
-
-                const listener = (event) => {   
-                    if (event.data.type === 'CARBON_SET_GEMINI_KEY_RESPONSE') {
-                        const payload = event.data.payload?.payload || event.data.payload;
-                        scope.logMessage('CARBON_SET_GEMINI_KEY_RESPONSE', event.data, payload);
-                        if(payload.success === true){
-                            window.postMessage({
-                                type: 'PROVIDER_STATUS_UPDATE',
-                                provider: 'gemini',
-                                status: true
-                            }, window.location.origin);
-                            resolve({success: true, content: 'Gemini key set successfully'});
-                        }else{
-                            resolve({success: false, content: 'Failed to set Gemini key'});
+                            resolve({success: false, content: 'Failed to set OpenRouter key'});
                         }
                         window.removeEventListener('message', listener);
                     }
@@ -578,8 +447,7 @@ Need more details? Try:
 - \`help\`: Show general help
 - \`get_usage_guide [topic]\`: Get detailed usage instructions
 - \`change-keybind\`: Change keyboard shortcut
-- \`set openai-key [key]\`: Set OpenAI API key
-- \`set gemini-key [key]\`: Set Gemini API key
+- \`set openrouter-key [key]\`: Set OpenRouter API key
 - \`check-ollama\`: Check Ollama status
 
 ## Navigation
@@ -642,7 +510,7 @@ Need more details? Try:
 
 ## Key Features
 1. **AI Integration**
-   - OpenAI/Gemini for advanced processing
+   - OpenRouter for cloud-based models
    - Ollama for local operations
    - Real-time responses
 
@@ -689,9 +557,9 @@ Need more help? Try:
         },
         execute: async function(scope, args) {
             window.postMessage({ type: 'SHOW_KEYBIND_DIALOG' }, window.location.origin);
-            return { 
-                success: true, 
-                result: "Opening keybind configuration dialog..." 
+            return {
+                success: true,
+                result: "Opening keybind configuration dialog..."
             };
         }
     };
@@ -722,7 +590,6 @@ Need more help? Try:
                 'smartermail': { class: 'SmarterMailTools', description: 'Tools for SmarterMail email system' }
             };
 
-            // Helper function to get tools for a specific toolset
             const getToolsForClass = (className) => {
                 if (!window.sbaiTools || !window.sbaiTools[className]) {
                     return [];
@@ -742,7 +609,7 @@ Need more help? Try:
                 if (siteInfo) {
                     const tools = getToolsForClass(siteInfo.class);
                     let result = `# ${site} Tools\n\n${siteInfo.description}\n\n`;
-                    
+
                     if (tools.length > 0) {
                         result += '## Available Tools\n\n';
                         tools.forEach(tool => {
@@ -751,7 +618,7 @@ Need more help? Try:
                     } else {
                         result += '> Note: Tools will be available when visiting the corresponding website.\n';
                     }
-                    
+
                     result += '\nTo use these tools, visit the corresponding website and use Carbon Commander (Ctrl/⌘ + K).';
                     return { success: true, result };
                 }
@@ -775,7 +642,7 @@ Need more help? Try:
                     result += '> Note: Tools will be available when visiting the corresponding website.\n\n';
                 }
             }
-            
+
             result += '\nTo use site-specific tools:\n';
             result += '1. Visit the corresponding website\n';
             result += '2. Open Carbon Commander (Ctrl/⌘ + K)\n';

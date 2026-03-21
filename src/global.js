@@ -83,23 +83,19 @@ export const ccLogger = ccLoggerEmpty;
 
 export const AICallerModels = {
     ['FAST']: {
-        ollama: 'mistral-small3.1',//'qwen2.5:14b',
-        openai: 'gpt-4o-mini',
-        gemini: 'gemini-2.5-flash-preview-04-17'
+        ollama: 'mistral-small3.1',
+        openrouter: 'openai/gpt-4o-mini'
     },
     ['REASON']: {
-        ollama: 'mistral-small3.1',//"deepseek-r1:70b",
-        openai: "o4-mini",
-        gemini: 'gemini-2.5-pro-exp-03-25'
+        ollama: 'mistral-small3.1',
+        openrouter: 'anthropic/claude-sonnet-4'
     },
     ['VISION']: {
-        ollama: 'mistral-small3.1',//"llama3.2-vision",
-        openai: "gpt-4.1",
-        gemini: 'gemini-2.5-flash-preview-04-17'
+        ollama: 'mistral-small3.1',
+        openrouter: 'openai/gpt-4o'
     },
     ['AUTOCOMPLETE']: {
-        ollama: 'gemma3:1b',//'mistral-small',//"qwen2.5:1.5b",
-        openai: "gpt-4.1-nano",
-        gemini: 'gemini-2.0-flash-lite'
+        ollama: 'gemma3:1b',
+        openrouter: 'openai/gpt-4o-mini'
     }
 }
