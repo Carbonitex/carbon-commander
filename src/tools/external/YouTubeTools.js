@@ -1,3 +1,5 @@
+import { TOOL_CONTEXT } from '../../global.js';
+
 class YouTubeTools {
     static name = "YouTubeTools";
 
@@ -5,7 +7,10 @@ class YouTubeTools {
         return window.location.hostname.includes('youtube.com');
     }
 
+    static _matchesUrl = (url) => url.hostname.includes('youtube.com');
+
     static GetVideoInfo = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'get_video_info',
             description: 'Get detailed information about the current YouTube video',
@@ -90,6 +95,7 @@ class YouTubeTools {
     };
 
     static GetChannelInfo = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'get_channel_info',
             description: 'Get information about the current YouTube channel',
@@ -163,6 +169,7 @@ class YouTubeTools {
     };
 
     static SearchYouTube = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'search_youtube',
             description: 'Search YouTube videos and channels',
@@ -247,6 +254,7 @@ class YouTubeTools {
     };
 
     static GetPlaylistInfo = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'get_playlist_info',
             description: 'Get information about a YouTube playlist',
@@ -302,12 +310,14 @@ class YouTubeTools {
     };
 }
 
-if(window.sbaiTools) {
-    window.sbaiTools['YouTubeTools'] = YouTubeTools;
-} else {
-    window.sbaiTools = {
-        'YouTubeTools': YouTubeTools
-    };
+if (typeof window !== 'undefined') {
+    if(window.sbaiTools) {
+        window.sbaiTools['YouTubeTools'] = YouTubeTools;
+    } else {
+        window.sbaiTools = {
+            'YouTubeTools': YouTubeTools
+        };
+    }
 }
 
 export { YouTubeTools }; 

@@ -1,6 +1,14 @@
 /**
  * Global logger implementation for Carbon Commander
  */
+
+export const TOOL_CONTEXT = {
+    WORKER: 'worker',
+    DOM_READ: 'dom_read',
+    DOM_WRITE: 'dom_write',
+    PAGE_UI: 'page_ui',
+    PAGE_SCOPE: 'page_scope'
+};
 let ccLoggerPrefix = '';
 let ccLoggerIgnorePrefixes = [];//['[CARBONBAR-SECURE]'];
 
@@ -80,22 +88,23 @@ export const ccLoggerFull = {
 };
 
 export const ccLogger = ccLoggerEmpty;
+//export const ccLogger = ccLoggerFull;
 
 export const AICallerModels = {
     ['FAST']: {
-        ollama: 'mistral-small3.1',
+        ollama: 'qwen3.5:9b',
         openrouter: 'openai/gpt-4o-mini'
     },
     ['REASON']: {
-        ollama: 'mistral-small3.1',
+        ollama: 'qwen3.5:9b',
         openrouter: 'anthropic/claude-sonnet-4'
     },
     ['VISION']: {
-        ollama: 'mistral-small3.1',
+        ollama: 'gemma4:latest',
         openrouter: 'openai/gpt-4o'
     },
     ['AUTOCOMPLETE']: {
-        ollama: 'gemma3:1b',
+        ollama: 'lfm2.5-thinking:1.2b-q8_0',
         openrouter: 'openai/gpt-4o-mini'
     }
 }

@@ -1,3 +1,5 @@
+import { TOOL_CONTEXT } from '../../global.js';
+
 class StackOverflowTools {
     static name = "StackOverflowTools";
 
@@ -5,7 +7,10 @@ class StackOverflowTools {
         return window.location.hostname.includes('stackoverflow.com');
     }
 
+    static _matchesUrl = (url) => url.hostname.includes('stackoverflow.com');
+
     static GetPageInfo = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'get_so_page_info',
             description: 'Get information about the current Stack Overflow page',
@@ -97,6 +102,7 @@ class StackOverflowTools {
     };
 
     static GetAnswers = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'get_answers',
             description: 'Get detailed information about answers on the current question page',
@@ -178,6 +184,7 @@ class StackOverflowTools {
     };
 
     static GetRelatedQuestions = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'get_related_questions',
             description: 'Get related questions from the sidebar',
@@ -239,6 +246,7 @@ class StackOverflowTools {
     };
 
     static GetQuestionDetails = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'get_question_details',
             description: 'Get detailed information about the current question',
@@ -302,12 +310,14 @@ class StackOverflowTools {
     };
 }
 
-if(window.sbaiTools) {
-    window.sbaiTools['StackOverflowTools'] = StackOverflowTools;
-} else {
-    window.sbaiTools = {
-        'StackOverflowTools': StackOverflowTools
-    };
+if (typeof window !== 'undefined') {
+    if(window.sbaiTools) {
+        window.sbaiTools['StackOverflowTools'] = StackOverflowTools;
+    } else {
+        window.sbaiTools = {
+            'StackOverflowTools': StackOverflowTools
+        };
+    }
 }
 
 export { StackOverflowTools }; 

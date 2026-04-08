@@ -1,9 +1,9 @@
 import { ccLogger } from '../../global.js';
 
 class OllamaClient {
-    static FAST_MODEL = "mistral-small3.1";
-    static AUTOCOMPLETE_MODEL = "gemma3:1b";
-    static VISION_MODEL = "mistral-small3.1";
+    static FAST_MODEL = "qwen3.5:9b";
+    static AUTOCOMPLETE_MODEL = "lfm2.5-thinking:1.2b-q8_0";
+    static VISION_MODEL = "gemma4:latest";
     static REASON_MODEL = "deepseek-r1:70b";
     static IMAGE_MODEL = null; 
 

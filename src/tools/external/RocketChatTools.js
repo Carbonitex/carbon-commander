@@ -1,13 +1,18 @@
+import { TOOL_CONTEXT } from '../../global.js';
+
 class RocketChatTools {
     static name = "RocketChatTools";
 
     static _CarbonBarPageLoadFilter = (window) => {
         // Match Rocket.Chat URLs - both cloud and self-hosted instances
-        return window.location.hostname.includes('rocket.chat') || 
+        return window.location.hostname.includes('rocket.chat') ||
                document.querySelector('meta[name="application-name"][content="Rocket.Chat"]') !== null;
     }
 
+    static _matchesUrl = (url) => url.hostname.includes('rocket.chat');
+
     static ReadChannel = {
+        context: TOOL_CONTEXT.PAGE_SCOPE,
         function: {
             name: 'read_channel',
             description: 'Read messages from a Rocket.Chat channel',
@@ -115,12 +120,14 @@ class RocketChatTools {
     };
 }
 
-if(window.sbaiTools) {
-    window.sbaiTools['RocketChatTools'] = RocketChatTools;
-} else {
-    window.sbaiTools = {
-        'RocketChatTools': RocketChatTools
-    };
+if (typeof window !== 'undefined') {
+    if(window.sbaiTools) {
+        window.sbaiTools['RocketChatTools'] = RocketChatTools;
+    } else {
+        window.sbaiTools = {
+            'RocketChatTools': RocketChatTools
+        };
+    }
 }
 
 export { RocketChatTools }; 

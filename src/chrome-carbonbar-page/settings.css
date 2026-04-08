@@ -304,4 +304,58 @@
 .cc-select option {
     background-color: rebeccapurple;
     color: white;
-} 
+}
+
+/* Modal overlay for update dialogs */
+.cc-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000002;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cc-modal-dialog {
+    background-color: rebeccapurple;
+    border: 1px solid mediumorchid;
+    border-radius: 8px;
+    padding: 16px;
+    min-width: 350px;
+    max-width: 500px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    color: white;
+}
+
+.cc-modal-dialog h3 {
+    color: #79c1ff;
+    font-size: 15px;
+    margin: 0 0 12px 0;
+}
+
+.cc-modal-dialog .cc-dialog-input {
+    width: 100%;
+    padding: 8px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: white;
+    font-size: 13px;
+    margin-bottom: 12px;
+    box-sizing: border-box;
+}
+
+.cc-modal-dialog .cc-dialog-input:focus {
+    border-color: #79c1ff;
+    outline: none;
+}
+
+.cc-modal-dialog .cc-dialog-buttons {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}

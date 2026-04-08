@@ -845,9 +845,16 @@ adding Ollama allows the command bar to run some prompts locally like autocomple
     }
 
     async show() {
+      if (!this.initializationComplete) {
+        ccLogger.warn('show() called before initialization complete, waiting...');
+        await new Promise(resolve => {
+          const check = () => this.initializationComplete ? resolve() : setTimeout(check, 50);
+          check();
+        });
+      }
       this.currentApp = (await this.toolCaller.getToolScope(this))?.appName || 'CarbonCommander [Unknown App]';
       this.updateTitle(this.currentApp);
-      
+
       const container = this.container.querySelector('.cc-container');
       container.classList.remove('processing', 'tool-running', 'has-error', 'success');
       container.classList.add('waiting-input');

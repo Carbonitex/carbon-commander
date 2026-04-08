@@ -1,13 +1,18 @@
+import { TOOL_CONTEXT } from '../../global.js';
+
 class JiraTools {
     static name = "JiraTools";
 
     static _CarbonBarPageLoadFilter = (window) => {
         // Match Jira Cloud or Server URLs
-        return window.location.hostname.includes('atlassian.net') || 
+        return window.location.hostname.includes('atlassian.net') ||
                window.location.pathname.includes('/jira/');
     }
 
+    static _matchesUrl = (url) => url.hostname.includes('atlassian.net') || url.pathname.includes('/jira/');
+
     static GetSprints = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'get_sprints',
             description: 'Get list of sprints for a board',
@@ -42,6 +47,7 @@ class JiraTools {
     };
 
     static ReadSprintBoard = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'read_sprint_board',
             description: 'Get all issues in a sprint board',
@@ -76,6 +82,7 @@ class JiraTools {
     };
 
     static CreateIssue = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'create_issue',
             description: 'Create a new issue (bug or task)',
@@ -145,6 +152,7 @@ class JiraTools {
     };
 
     static ChangeIssueStatus = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'change_issue_status',
             description: 'Change the status of an issue',
@@ -193,12 +201,14 @@ class JiraTools {
     };
 }
 
-if(window.sbaiTools) {
-    window.sbaiTools['JiraTools'] = JiraTools;
-} else {
-    window.sbaiTools = {
-        'JiraTools': JiraTools
-    };
+if (typeof window !== 'undefined') {
+    if(window.sbaiTools) {
+        window.sbaiTools['JiraTools'] = JiraTools;
+    } else {
+        window.sbaiTools = {
+            'JiraTools': JiraTools
+        };
+    }
 }
 
 export { JiraTools }; 

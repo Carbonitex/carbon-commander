@@ -1,3 +1,5 @@
+import { TOOL_CONTEXT } from '../../global.js';
+
 class LinkedInTools {
     static name = "LinkedInTools";
 
@@ -5,7 +7,10 @@ class LinkedInTools {
         return window.location.hostname.includes('linkedin.com');
     }
 
+    static _matchesUrl = (url) => url.hostname.includes('linkedin.com');
+
     static GetProfileInfo = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'get_profile_info',
             description: 'Get detailed information about the current LinkedIn profile',
@@ -70,6 +75,7 @@ class LinkedInTools {
     };
 
     static GetJobInfo = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'get_job_info',
             description: 'Get information about the current job posting',
@@ -121,6 +127,7 @@ class LinkedInTools {
     };
 
     static SearchJobs = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'search_jobs',
             description: 'Search LinkedIn jobs',
@@ -196,6 +203,7 @@ class LinkedInTools {
     };
 
     static GetCompanyInfo = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'get_company_info',
             description: 'Get information about the current company page',
@@ -252,12 +260,14 @@ class LinkedInTools {
     };
 }
 
-if(window.sbaiTools) {
-    window.sbaiTools['LinkedInTools'] = LinkedInTools;
-} else {
-    window.sbaiTools = {
-        'LinkedInTools': LinkedInTools
-    };
+if (typeof window !== 'undefined') {
+    if(window.sbaiTools) {
+        window.sbaiTools['LinkedInTools'] = LinkedInTools;
+    } else {
+        window.sbaiTools = {
+            'LinkedInTools': LinkedInTools
+        };
+    }
 }
 
 export { LinkedInTools }; 

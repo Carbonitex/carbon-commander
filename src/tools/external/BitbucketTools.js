@@ -1,3 +1,5 @@
+import { TOOL_CONTEXT } from '../../global.js';
+
 class BitbucketTools {
     static name = "BitbucketTools";
 
@@ -5,7 +7,10 @@ class BitbucketTools {
         return window.location.hostname.includes('bitbucket.org');
     }
 
+    static _matchesUrl = (url) => url.hostname.includes('bitbucket.org');
+
     static CreatePullRequest = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'create_pullrequest',
             description: 'Create a new pull request',
@@ -68,6 +73,7 @@ class BitbucketTools {
     };
 
     static GetPullRequests = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'get_pullrequests',
             description: 'Get list of pull requests',
@@ -109,6 +115,7 @@ class BitbucketTools {
     };
 
     static GetRecentCommits = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'get_recent_commits',
             description: 'Get recent commits for a branch',
@@ -155,6 +162,7 @@ class BitbucketTools {
     };
 
     static GetRepositoryInfo = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'get_repository_info',
             description: 'Get information about the current repository',
@@ -194,6 +202,7 @@ class BitbucketTools {
     };
 
     static GetBranches = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'get_branches',
             description: 'Get list of branches in the repository',
@@ -244,6 +253,7 @@ class BitbucketTools {
     };
 
     static CompareBranches = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'compare_branches',
             description: 'Compare two branches and get the diff',
@@ -283,12 +293,14 @@ class BitbucketTools {
     };
 }
 
-if(window.sbaiTools) {
-    window.sbaiTools['BitbucketTools'] = BitbucketTools;
-} else {
-    window.sbaiTools = {
-        'BitbucketTools': BitbucketTools
-    };
+if (typeof window !== 'undefined') {
+    if(window.sbaiTools) {
+        window.sbaiTools['BitbucketTools'] = BitbucketTools;
+    } else {
+        window.sbaiTools = {
+            'BitbucketTools': BitbucketTools
+        };
+    }
 }
 
 export { BitbucketTools }; 

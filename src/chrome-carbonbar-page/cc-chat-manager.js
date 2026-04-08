@@ -136,21 +136,21 @@ class ChatManager {
             ccLogger.debug('imageUrls1', resultContainer);
             let aiOutput = resultContainer.querySelector('.cc-ai-output');
 
-            let htmlContent = aiOutput.innerHTML;
-            const imageUrls = htmlContent.match(/"(.*)image_(.*)\.png"/g);
-            console.log('imageUrls2', imageUrls);
-            if (imageUrls && imageUrls.length > 0) {
-                imageUrls.forEach(imageUrl => {
-                    const requestId = imageUrl.match(/"(.*)image_(.*)\.png"/)[2];
-                    window.cbImages.forEach(image => {
-                        console.log('imageUrlsMatch', image.requestId, requestId);
-                        if (image.requestId == requestId) {
-                            htmlContent = htmlContent.replace(imageUrl, `"${image.data}"`);
-                        }
+            if (aiOutput) {
+                let htmlContent = aiOutput.innerHTML;
+                const imageUrls = htmlContent.match(/"(.*)image_(.*)\.png"/g);
+                if (imageUrls && imageUrls.length > 0) {
+                    imageUrls.forEach(imageUrl => {
+                        const requestId = imageUrl.match(/"(.*)image_(.*)\.png"/)[2];
+                        window.cbImages.forEach(image => {
+                            if (image.requestId == requestId) {
+                                htmlContent = htmlContent.replace(imageUrl, `"${image.data}"`);
+                            }
+                        });
                     });
-                });
+                }
+                aiOutput.innerHTML = htmlContent;
             }
-            aiOutput.innerHTML = htmlContent;
         }
 
         if (payload.messages && !payload.error) {
@@ -228,14 +228,15 @@ class ChatManager {
             if (this.bar.providerManager.hasNoAIMode) {
                 this.bar.providerManager.noAIModeInputHandler(this.messages);
             } else {
-                const localTools = this.bar.toolCaller.getTools(true);
+                // Internal tools are now discovered by the service worker from the tool registry.
+                // Only external MCP tools need to be sent from the page.
                 const mcpTools = Array.from(this.bar.mcpToolCaller.mcpToolsets.values())
                     .reduce((tools, toolset) => tools.concat(toolset.tools), []);
 
                 var request = {
                     messages: this.messages,
                     model: AICallerModels.FAST,
-                    tools: [...localTools, ...mcpTools],
+                    tools: mcpTools.length > 0 ? mcpTools : [],
                     temp: 0.7,
                     keepAlive: '30m'
                 };

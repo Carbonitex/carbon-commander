@@ -1,9 +1,13 @@
+import { TOOL_CONTEXT } from '../global.js';
+
 class CarbonBarHelpTools {
     static name = "CarbonBarHelpTools";
 
     static _CarbonBarPageLoadFilter = (window) => {
         return true; //manually get injected as needed
     }
+
+    static _matchesUrl = (url) => true;
 
     static GetNoAIModeToolInfo() {
         return [
@@ -18,6 +22,7 @@ class CarbonBarHelpTools {
     }
 
     static ListGuides = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'list_guides',
             description: 'List all available guides and documentation',
@@ -69,6 +74,7 @@ Use \`get_usage_guide [topic]\` with:
     };
 
     static GetSetupGuide = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'get_setup_guide',
             description: 'Get detailed setup instructions for OpenRouter, Ollama, and MCP',
@@ -311,6 +317,7 @@ Need more details? Try:
     };
 
     static CheckOllamaStatus = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'check_ollama_status',
             description: 'Check if Ollama is running and accessible',
@@ -342,6 +349,7 @@ Need more details? Try:
     };
 
     static SetOpenRouterKey = {
+        context: TOOL_CONTEXT.PAGE_UI,
         function: {
             name: 'set_openrouter_key',
             description: 'Set the OpenRouter key',
@@ -390,6 +398,7 @@ Need more details? Try:
     };
 
     static GetUsageGuide = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'get_usage_guide',
             description: 'Get detailed usage instructions for Carbon Commander features',
@@ -550,6 +559,7 @@ Need more help? Try:
     };
 
     static ChangeKeybind = {
+        context: TOOL_CONTEXT.PAGE_UI,
         function: {
             name: 'change-keybind',
             description: 'Change the keyboard shortcut for opening Carbon Commander',
@@ -565,6 +575,7 @@ Need more help? Try:
     };
 
     static ListSiteTools = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'list_site_tools',
             description: 'List all available site-specific tools and their descriptions',
@@ -654,6 +665,8 @@ Need more help? Try:
     };
 }
 
-(window.sbaiTools ??= {}).CarbonBarHelpTools = CarbonBarHelpTools;
+if (typeof window !== 'undefined') {
+    (window.sbaiTools ??= {}).CarbonBarHelpTools = CarbonBarHelpTools;
+}
 
 export { CarbonBarHelpTools };

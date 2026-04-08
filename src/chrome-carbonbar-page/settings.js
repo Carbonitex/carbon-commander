@@ -593,12 +593,12 @@ export class Settings {
             if (e.target.classList.contains('update-encrypted')) {
                 const row = e.target.closest('tr');
                 const key = row.querySelector('.kv-key').value;
-                
-                // Show input dialog for new encrypted value
-                const inputDialog = document.createElement('div');
-                inputDialog.classList.add('cc-dialog');
-                inputDialog.innerHTML = `
-                    <div class="cc-dialog-content">
+
+                // Show input dialog as a proper modal overlay
+                const modalOverlay = document.createElement('div');
+                modalOverlay.classList.add('cc-modal-overlay');
+                modalOverlay.innerHTML = `
+                    <div class="cc-modal-dialog">
                         <h3>Update Encrypted Value</h3>
                         <div class="cc-input-group">
                             <label>New value for ${key}:</label>
@@ -610,19 +610,22 @@ export class Settings {
                         </div>
                     </div>
                 `;
-                
-                dialog.appendChild(inputDialog);
-                
-                const input = inputDialog.querySelector('.cc-dialog-input');
-                input.focus();
-                
-                inputDialog.querySelector('.cancel').addEventListener('click', () => {
-                    inputDialog.remove();
-                });
-                
-                inputDialog.querySelector('.confirm').addEventListener('click', async () => {
-                    const newValue = input.value.trim();
 
+                overlay.appendChild(modalOverlay);
+
+                const input = modalOverlay.querySelector('.cc-dialog-input');
+                input.focus();
+
+                modalOverlay.addEventListener('click', (ev) => {
+                    if (ev.target === modalOverlay) modalOverlay.remove();
+                });
+
+                modalOverlay.querySelector('.cancel').addEventListener('click', () => {
+                    modalOverlay.remove();
+                });
+
+                modalOverlay.querySelector('.confirm').addEventListener('click', async () => {
+                    const newValue = input.value.trim();
 
                     if(key === 'openrouter-key') {
                         const response = await this.testOpenRouterKey(newValue);
@@ -639,8 +642,8 @@ export class Settings {
                     const encryptedValue = row.querySelector('.encrypted-value');
                     const hasValue = newValue !== null && newValue !== undefined && newValue !== '';
                     encryptedValue.innerHTML = hasValue ? '<span style="color: lime; font-style: italic;">Updated</span>' : '<span style="color: red; font-style: italic;">Empty</span>';
-                        
-                    inputDialog.remove();
+
+                    modalOverlay.remove();
                 });
             }
 
@@ -654,12 +657,12 @@ export class Settings {
             if (e.target.classList.contains('update-mcp-key')) {
                 const row = e.target.closest('tr');
                 const serviceId = row.querySelector('.mcp-service-id').value;
-                
-                // Show input dialog for new API key
-                const inputDialog = document.createElement('div');
-                inputDialog.classList.add('cc-dialog');
-                inputDialog.innerHTML = `
-                    <div class="cc-dialog-content">
+
+                // Show input dialog as a proper modal overlay
+                const modalOverlay = document.createElement('div');
+                modalOverlay.classList.add('cc-modal-overlay');
+                modalOverlay.innerHTML = `
+                    <div class="cc-modal-dialog">
                         <h3>Update MCP API Key</h3>
                         <div class="cc-input-group">
                             <label>New API key for ${serviceId}:</label>
@@ -671,17 +674,21 @@ export class Settings {
                         </div>
                     </div>
                 `;
-                
-                dialog.appendChild(inputDialog);
-                
-                const input = inputDialog.querySelector('.cc-dialog-input');
+
+                overlay.appendChild(modalOverlay);
+
+                const input = modalOverlay.querySelector('.cc-dialog-input');
                 input.focus();
-                
-                inputDialog.querySelector('.cancel').addEventListener('click', () => {
-                    inputDialog.remove();
+
+                modalOverlay.addEventListener('click', (ev) => {
+                    if (ev.target === modalOverlay) modalOverlay.remove();
                 });
-                
-                inputDialog.querySelector('.confirm').addEventListener('click', async () => {
+
+                modalOverlay.querySelector('.cancel').addEventListener('click', () => {
+                    modalOverlay.remove();
+                });
+
+                modalOverlay.querySelector('.confirm').addEventListener('click', async () => {
                     const newValue = input.value.trim();
                     if (newValue) {
                         const config = this.mcpConfigurations.get(serviceId) || {};
@@ -692,11 +699,11 @@ export class Settings {
                             apiKey: newValue,
                             options: config.options
                         });
-                        
+
                         const encryptedValue = row.querySelector('.encrypted-value');
                         encryptedValue.innerHTML = '••••••••';
                     }
-                    inputDialog.remove();
+                    modalOverlay.remove();
                 });
             }
 

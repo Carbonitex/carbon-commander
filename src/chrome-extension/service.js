@@ -359,6 +359,10 @@ if (!window.carbonBarInjected && !inIframe) {
 
     // Handle both prefixed and unprefixed message types for backward compatibility
     const messageType = event.data.type;
+    if (!messageType) {
+      ccLogger.groupEnd();
+      return;
+    }
     const unprefixedType = messageType.replace(/^CARBON_/, '');
     ccLogger.debug('Processing message:', { original: messageType, unprefixed: unprefixedType });
 

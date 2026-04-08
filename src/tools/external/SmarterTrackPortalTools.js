@@ -1,3 +1,5 @@
+import { TOOL_CONTEXT } from '../../global.js';
+
 class SmarterTrackPortalTools {
     static name = "SmarterTrackPortalTools";
 
@@ -5,7 +7,10 @@ class SmarterTrackPortalTools {
         return document.getElementsByTagName('html')[0]?.className.includes('smartertrack-portal');
     }
 
+    static _matchesUrl = (url) => false;
+
     static ReadCommunitySection = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'read_community_section',
             description: 'Read a section of the SmarterTrack community portal',
@@ -49,6 +54,7 @@ class SmarterTrackPortalTools {
     };
 
     static ReadCommunityPost = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'read_community_post',
             description: 'Read a specific community post',
@@ -74,6 +80,7 @@ class SmarterTrackPortalTools {
     };
 
     static ReadKnowledgeBase = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'read_kb',
             description: 'Search or browse the knowledge base',
@@ -109,6 +116,7 @@ class SmarterTrackPortalTools {
     };
 
     static SearchKnowledgeBase = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'search_kb',
             description: 'Search the knowledge base',
@@ -174,6 +182,7 @@ class SmarterTrackPortalTools {
     };
 
     static GetKBArticle = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'get_kb_article',
             description: 'Get a specific knowledge base article',
@@ -215,12 +224,14 @@ class SmarterTrackPortalTools {
     };
 }
 
-if(window.sbaiTools) {
-    window.sbaiTools['SmarterTrackPortalTools'] = SmarterTrackPortalTools;
-} else {
-    window.sbaiTools = {
-        'SmarterTrackPortalTools': SmarterTrackPortalTools
-    };
+if (typeof window !== 'undefined') {
+    if(window.sbaiTools) {
+        window.sbaiTools['SmarterTrackPortalTools'] = SmarterTrackPortalTools;
+    } else {
+        window.sbaiTools = {
+            'SmarterTrackPortalTools': SmarterTrackPortalTools
+        };
+    }
 }
 
 export { SmarterTrackPortalTools }; 

@@ -1,9 +1,13 @@
+import { TOOL_CONTEXT } from '../../global.js';
+
 class HackerNewsTools {
     static name = "HackerNewsTools";
 
     static _CarbonBarPageLoadFilter = (window) => {
         return window.location.hostname.includes('news.ycombinator.com');
     }
+
+    static _matchesUrl = (url) => url.hostname.includes('news.ycombinator.com');
 
     static _CarbonBarBuildScope = async (scope) => {
         try{
@@ -18,6 +22,7 @@ class HackerNewsTools {
     }
 
     static ReadPage = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'read_hn_page',
             description: 'Read a specific page from Hacker News',
@@ -76,6 +81,7 @@ class HackerNewsTools {
     };
 
     static ReadComments = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'read_hn_comments',
             description: 'Read comments from a Hacker News story',
@@ -139,12 +145,14 @@ class HackerNewsTools {
     };
 }
 
-if(window.sbaiTools) {
-    window.sbaiTools['HackerNewsTools'] = HackerNewsTools;
-} else {
-    window.sbaiTools = {
-        'HackerNewsTools': HackerNewsTools
-    };
+if (typeof window !== 'undefined') {
+    if(window.sbaiTools) {
+        window.sbaiTools['HackerNewsTools'] = HackerNewsTools;
+    } else {
+        window.sbaiTools = {
+            'HackerNewsTools': HackerNewsTools
+        };
+    }
 }
 
 export { HackerNewsTools }; 

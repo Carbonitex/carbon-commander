@@ -1,9 +1,16 @@
+import { TOOL_CONTEXT } from '../global.js';
+
 class GeneralTools {
+    static name = "GeneralTools";
+
     static _CarbonBarPageLoadFilter = (window) => {
         return true; //Always available
     }
 
+    static _matchesUrl = (url) => true;
+
     static SearchWeb = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'search_web',
             description: 'Search the web using DuckDuckGo',
@@ -43,6 +50,7 @@ class GeneralTools {
     };
 
     static SecurityCheck = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'security_check',
             description: 'Perform a basic security analysis of the current website',
@@ -146,6 +154,7 @@ class GeneralTools {
     };
 
     static GenerateImage = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'generate_image',
             description: 'Generate an image using AI via OpenRouter',
@@ -238,6 +247,7 @@ class GeneralTools {
     };
 
     static GetPageMetadata = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'get_page_metadata',
             description: 'Get metadata about the current webpage',
@@ -269,6 +279,7 @@ class GeneralTools {
     };
 
     static ExtractPageContent = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'extract_page_content',
             description: 'Extract main content from the current webpage',
@@ -363,6 +374,7 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
     };
 
     static PromptUserForConfirmation = {
+        context: TOOL_CONTEXT.PAGE_UI,
         function: {
             name: 'prompt_user_for_confirmation',
             description: 'Prompt the user for confirmation',
@@ -433,6 +445,7 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
     };
 
     static PromptUserForInput = {
+        context: TOOL_CONTEXT.PAGE_UI,
         function: {
             name: 'prompt_user_for_input',
             description: 'Prompt the user for input, you can spawn multiple prompts at once if needed',
@@ -505,6 +518,7 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
     };
 
     static ColorPicker = {
+        context: TOOL_CONTEXT.DOM_WRITE,
         function: {
             name: 'color_picker',
             description: 'Pick colors from the current webpage or get color suggestions',
@@ -664,6 +678,7 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
     };
 
     static ListAllKeys = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'list_all_keys',
             description: 'List all keys in the key/value store'
@@ -680,6 +695,7 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
     };
 
     static ManageKeyValue = {
+        context: TOOL_CONTEXT.PAGE_UI,
         function: {
             name: 'manage_key_value',
             description: 'Get or set key/value pairs for various services. Use this to manage API keys for OpenRouter and other any other kind of data.',
@@ -778,6 +794,7 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
     };
 
     static PageInteract = {
+        context: TOOL_CONTEXT.DOM_WRITE,
         function: {
             name: 'page_interact',
             description: 'Click elements or perform page interactions based on selectors or text content',
@@ -895,6 +912,7 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
     };
 
     static InputText = {
+        context: TOOL_CONTEXT.DOM_WRITE,
         function: {
             name: 'input_text',
             description: 'Enter text into form fields or contenteditable elements',
@@ -1001,6 +1019,7 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
     };
 
     static NavigateTo = {
+        context: TOOL_CONTEXT.DOM_WRITE,
         function: {
             name: 'navigate_to',
             description: 'Navigate the current page to a target URL with various options',
@@ -1110,12 +1129,14 @@ Chat count: ${trimmedChatCount} / ${chatCount}, Word count: ${trimmedWordCount} 
         }
     };
 }
-if(window.sbaiTools) {
-    window.sbaiTools['GeneralTools'] = GeneralTools;
-} else {
-    window.sbaiTools = {
-        'GeneralTools': GeneralTools
-    };
+if (typeof window !== 'undefined') {
+    if(window.sbaiTools) {
+        window.sbaiTools['GeneralTools'] = GeneralTools;
+    } else {
+        window.sbaiTools = {
+            'GeneralTools': GeneralTools
+        };
+    }
 }
 
 export { GeneralTools };

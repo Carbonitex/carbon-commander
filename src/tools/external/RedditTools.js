@@ -1,3 +1,5 @@
+import { TOOL_CONTEXT } from '../../global.js';
+
 class RedditTools {
     static name = "RedditTools";
 
@@ -5,7 +7,10 @@ class RedditTools {
         return window.location.hostname.includes('reddit.com');
     }
 
+    static _matchesUrl = (url) => url.hostname.includes('reddit.com');
+
     static GetPostInfo = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'get_post_info',
             description: 'Get detailed information about the current Reddit post',
@@ -72,6 +77,7 @@ class RedditTools {
     };
 
     static GetSubredditInfo = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'get_subreddit_info',
             description: 'Get information about the current subreddit',
@@ -137,6 +143,7 @@ class RedditTools {
     };
 
     static SearchReddit = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'search_reddit',
             description: 'Search Reddit posts and subreddits',
@@ -205,12 +212,14 @@ class RedditTools {
     };
 }
 
-if(window.sbaiTools) {
-    window.sbaiTools['RedditTools'] = RedditTools;
-} else {
-    window.sbaiTools = {
-        'RedditTools': RedditTools
-    };
+if (typeof window !== 'undefined') {
+    if(window.sbaiTools) {
+        window.sbaiTools['RedditTools'] = RedditTools;
+    } else {
+        window.sbaiTools = {
+            'RedditTools': RedditTools
+        };
+    }
 }
 
 export { RedditTools }; 

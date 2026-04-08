@@ -1,4 +1,7 @@
 import AICaller from './external-services/caller.js';
+import mcpInternalService from './mcp-internal-service.js';
+import toolRegistry from './tool-registry.js';
+import { TOOL_CONTEXT } from '../global.js';
 
 
 let currentToolResolvePromise = null;
@@ -57,6 +60,29 @@ const toolCaller = async (tabId, authToken, tool) => {
         throw new Error('Tab no longer exists');
     }
 
+    // Check if this tool can be executed directly in the worker
+    const context = toolRegistry.getToolContext(tool.name);
+    if (context === TOOL_CONTEXT.WORKER) {
+        ccLogMessage('Executing tool in worker:', tool.name);
+        const result = await toolRegistry.executeInWorker(tool.name, tool.arguments, tabId);
+        const response = { ...result, tool_call_id: tool.id };
+        ccLogMessage('Worker tool result:', response);
+        return response;
+    }
+
+    // Check if this DOM tool has a proxy function we can run via chrome.scripting
+    if (context === TOOL_CONTEXT.DOM_READ || context === TOOL_CONTEXT.DOM_WRITE) {
+        const domResult = await toolRegistry.executeViaDOM(tool.name, tool.arguments, tabId);
+        if (domResult !== null) {
+            const response = { ...domResult, tool_call_id: tool.id };
+            ccLogMessage('DOM proxy result:', response);
+            return response;
+        }
+        // domResult === null means no DOM function mapped, fall through to page
+    }
+
+    // Fall through to page execution for PAGE_UI/PAGE_SCOPE tools and unmapped DOM tools
+    ccLogMessage('Delegating tool to page:', tool.name, `(context: ${context})`);
     const currentToolPromise = new Promise((resolve) => {
         currentToolResolvePromise = resolve;
         sendMessageToTab(tabId, authToken, 'AI_EXECUTE_TOOL', {
@@ -92,6 +118,17 @@ async function handleAIRequest(tabId, authToken, request) {
             throw new Error('NO_AI_PROVIDER');
         }
 
+        // Discover internal tools from the registry based on the tab URL
+        let tools = request.tools || [];
+        if (tab.url) {
+            const internalTools = toolRegistry.getToolDefinitions(tab.url);
+            ccLogMessage(`Discovered ${internalTools.length} internal tools for ${tab.url}`);
+            // Merge: internal tools first, then any external MCP tools from the page
+            const internalNames = new Set(internalTools.map(t => t.name));
+            const externalOnly = tools.filter(t => !internalNames.has(t.name));
+            tools = [...internalTools, ...externalOnly];
+        }
+
         const [response, token, messages] = await AICaller.chatCompletion(
             request.messages,
             (chunk) => {
@@ -105,7 +142,7 @@ async function handleAIRequest(tabId, authToken, request) {
             request.model,
             request.provider,
             (tool) => toolCaller(tabId, authToken, tool),
-            request.tools,
+            tools,
             request.temp,
             request.keepAlive
         );
@@ -338,6 +375,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         sendResponse({ success: true });
+        return true;
+    }
+
+    // MCP internal service handlers
+    if (unprefixedType.startsWith('MCP_')) {
+        mcpInternalService.handleMessage(unprefixedType, message.payload, sender)
+            .then(result => {
+                ccLogMessage('MCP response:', unprefixedType, result);
+                sendResponse(result);
+            })
+            .catch(error => {
+                ccLogError('MCP error:', error);
+                sendResponse({ error: error.message });
+            });
         return true;
     }
 

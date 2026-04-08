@@ -1,3 +1,5 @@
+import { TOOL_CONTEXT } from '../../global.js';
+
 class AmazonTools {
     static name = "AmazonTools";
 
@@ -5,7 +7,10 @@ class AmazonTools {
         return window.location.hostname.includes('amazon.com');
     }
 
+    static _matchesUrl = (url) => url.hostname.includes('amazon.com');
+
     static GetProductInfo = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'get_product_info',
             description: 'Get detailed information about the current product',
@@ -79,6 +84,7 @@ class AmazonTools {
     };
 
     static SearchProducts = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'search_products',
             description: 'Search Amazon products',
@@ -163,6 +169,7 @@ class AmazonTools {
 
     //TODO: Fix GetPriceHistory
     static GetPriceHistory = {
+        context: TOOL_CONTEXT.WORKER,
         DISABLEDfunction: {
             name: 'get_price_history',
             description: 'Get price history for the current product',
@@ -212,6 +219,7 @@ class AmazonTools {
 
     //TODO: Fix GetSellerInfo
     static GetSellerInfo = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'get_seller_info',
             description: 'Get information about a product seller',
@@ -276,12 +284,14 @@ class AmazonTools {
     };
 }
 
-if(window.sbaiTools) {
-    window.sbaiTools['AmazonTools'] = AmazonTools;
-} else {
-    window.sbaiTools = {
-        'AmazonTools': AmazonTools
-    };
+if (typeof window !== 'undefined') {
+    if(window.sbaiTools) {
+        window.sbaiTools['AmazonTools'] = AmazonTools;
+    } else {
+        window.sbaiTools = {
+            'AmazonTools': AmazonTools
+        };
+    }
 }
 
 export { AmazonTools }; 

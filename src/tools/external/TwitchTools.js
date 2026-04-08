@@ -1,3 +1,5 @@
+import { TOOL_CONTEXT } from '../../global.js';
+
 class TwitchTools {
     static name = "TwitchTools";
 
@@ -5,7 +7,10 @@ class TwitchTools {
         return window.location.hostname.includes('twitch.tv');
     }
 
+    static _matchesUrl = (url) => url.hostname.includes('twitch.tv');
+
     static ListLiveStreams = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'list_live_streams',
             description: 'List live streams based on category',
@@ -133,6 +138,7 @@ class TwitchTools {
     };
 
     static OpenStream = {
+        context: TOOL_CONTEXT.DOM_WRITE,
         function: {
             name: 'open_stream',
             description: 'Open a Twitch stream',
@@ -177,6 +183,7 @@ class TwitchTools {
     };
 
     static GetStreamInfo = {
+        context: TOOL_CONTEXT.DOM_READ,
         function: {
             name: 'get_stream_info',
             description: 'Get detailed information about the current stream',
@@ -272,6 +279,7 @@ class TwitchTools {
     };
 
     static GetTopCategories = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'get_top_categories',
             description: 'Get top game categories on Twitch',
@@ -341,6 +349,7 @@ class TwitchTools {
     };
 
     static GetClips = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'get_clips',
             description: 'Get clips from a channel',
@@ -420,12 +429,14 @@ class TwitchTools {
     };
 }
 
-if(window.sbaiTools) {
-    window.sbaiTools['TwitchTools'] = TwitchTools;
-} else {
-    window.sbaiTools = {
-        'TwitchTools': TwitchTools
-    };
+if (typeof window !== 'undefined') {
+    if(window.sbaiTools) {
+        window.sbaiTools['TwitchTools'] = TwitchTools;
+    } else {
+        window.sbaiTools = {
+            'TwitchTools': TwitchTools
+        };
+    }
 }
 
 export { TwitchTools }; 

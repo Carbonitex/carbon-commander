@@ -1,3 +1,5 @@
+import { TOOL_CONTEXT } from '../../global.js';
+
 class StockTools {
     static name = "StockTools";
 
@@ -8,7 +10,10 @@ class StockTools {
                window.location.hostname.includes('investing.com');
     }
 
+    static _matchesUrl = (url) => url.hostname.includes('finance.yahoo.com') || url.hostname.includes('marketwatch.com') || url.hostname.includes('investing.com');
+
     static GetStockInfo = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'get_stock_info',
             description: 'Get detailed information about a stock',
@@ -63,6 +68,7 @@ class StockTools {
     };
 
     static GetMarketIndices = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'get_market_indices',
             description: 'Get major market indices information',
@@ -100,6 +106,7 @@ class StockTools {
     };
 
     static GetTopMovers = {
+        context: TOOL_CONTEXT.WORKER,
         function: {
             name: 'get_top_movers',
             description: 'Get top gaining and losing stocks',
@@ -152,12 +159,14 @@ class StockTools {
     };
 }
 
-if(window.sbaiTools) {
-    window.sbaiTools['StockTools'] = StockTools;
-} else {
-    window.sbaiTools = {
-        'StockTools': StockTools
-    };
+if (typeof window !== 'undefined') {
+    if(window.sbaiTools) {
+        window.sbaiTools['StockTools'] = StockTools;
+    } else {
+        window.sbaiTools = {
+            'StockTools': StockTools
+        };
+    }
 }
 
 export { StockTools }; 
