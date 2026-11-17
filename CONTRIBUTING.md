@@ -1,83 +1,74 @@
 # Contributing to Carbon Commander
 
-Hey there! 👋 Thanks for being interested in contributing to Carbon Commander. This project is pretty unique - most of the code was actually generated through pair programming with AI (specifically Claude + Cursor). I think that's pretty cool, and it shows how we can leverage AI to build complex software while still maintaining quality and readability.
+Thanks for your interest. Bug fixes, new toolsets, documentation and ideas are all welcome.
 
-## The AI-First Development Approach
+Much of this project was written in pair programming with AI assistants. You are welcome to use
+them too; just review and understand what you submit, and test it.
 
-One of the most interesting aspects of this project is how it was built. Rather than writing everything from scratch, I worked with AI to:
-- Design the architecture and core features
-- Generate initial implementations
-- Refactor and improve code
-- Add new features and capabilities
-- Write documentation and tests
-- Update this file to be less generic and more specific to this project. (lol)
+## Getting started
 
-This means that when you contribute, you're not just working with my code - you're working with code that was collaboratively created between human and AI. Pretty neat, right?
+```bash
+npm ci
+npx playwright install chromium   # once, for the end-to-end test
+npm run watch                     # rebuilds dist/ on change; load dist/ unpacked in Chrome
+```
 
-## How to Contribute
+Before opening a pull request, run:
 
-I'm super open to contributions! Whether you want to:
-- Fix bugs you've found
-- Add cool new features
-- Improve the documentation
-- Suggest better ways to use AI in the development process
-- Share ideas for new tools or integrations
+```bash
+npm run check        # typecheck + lint + unit tests + build
+npm run test:e2e     # end-to-end tests in Playwright's Chromium (e2e + production builds)
+```
 
-The process is pretty straightforward:
+## Layout
 
-1. Fork the repo
-2. Create a branch for your changes
-3. Make your awesome improvements
-4. Submit a PR
+```
+src/
+  shared/       contracts used everywhere: types, wire protocol, defaults, logger
+  background/   service worker entry (index.ts), sessions, settings, secrets, bar trust
+  llm/          OpenAI-compatible client, providers, tool schema conversion
+  agent/        the agent loop (pure: no chrome.* inside)
+  mcp/          Streamable HTTP MCP client and server manager
+  tools/        tool registry, page executor and toolsets (generic/, sites/, builtin/)
+  content/      the content script that hosts the overlay
+  ui/           the bar page: chat, settings, state reducer, markdown rendering
+  icons/        extension icons (drawn by scripts/icons.mjs)
+tests/          Vitest unit tests mirroring src/, helpers/, and e2e/ (Playwright)
+docs/           ARCHITECTURE.md
+scripts/        build, package, version and icon scripts
+```
 
-Don't worry too much about getting everything perfect - we can iterate and improve things together. I'm happy to provide feedback and suggestions.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the parts talk to each other and the
+security model. Wire messages are typed in `src/shared/protocol.ts`; change them additively and
+keep the worker's validation in step.
 
-## Using AI in Your Contributions
+## Adding a toolset
 
-Feel free to use AI assistants (like ChatGPT, Claude, etc.) when working on your contributions! Just make sure to:
-- Review and understand the generated code
-- Test that everything works as expected
-- Document any interesting AI interactions that led to your solution
-- Keep the code quality high (AI can sometimes take shortcuts)
+Read [src/tools/README.md](src/tools/README.md). In short: one file under `src/tools/sites/`, tools
+defined with `defineBackgroundTool` / `definePageTool`, `mutates: true` on anything that changes
+state, `matches(url)` so the toolset appears only on its site, a stable public API rather than CSS
+selectors, and a unit test with a fake `fetch`.
 
-## A Note About the License
+## Guidelines
 
-The project uses the MIT License. This means you can:
-- Use the code freely in your own projects (including commercial ones)
-- Modify and distribute the code
-- Use the code in proprietary software without releasing your source code
+- TypeScript strict mode, 2-space indentation, `npm run lint` clean.
+- Never write untrusted strings into the DOM as HTML. The UI builds elements with `h()` and
+  `textContent`; model markdown goes through `setSanitizedHtml()` (DOMPurify). ESLint enforces this.
+- Model ids are hard-coded only in `src/shared/defaults.ts`.
+- `chrome.*` listeners in the service worker are registered synchronously at top level, and nothing
+  may throw while the worker loads.
+- Test logic (parsers, loop, storage, registry, protocol) with unit tests; user flows belong in the
+  end-to-end test.
+- This repository is public: no private hostnames, addresses, tokens or personal details in code,
+  tests or docs.
 
-The only requirement is that you include the original copyright notice and license text in any copy of the software/source.
+## Bug reports and feature requests
 
-## Need Help?
+Open an issue with what you tried, what happened, the provider/model you used, and any errors from
+the extension (chrome://extensions → Carbon Commander → "service worker" for the worker console;
+right-click inside the bar → Inspect for the bar).
 
-If you're stuck, have questions, or just want to bounce ideas around:
-- Open an issue on GitHub
-- Check out the existing discussions
-- Reach out to me directly
+## License
 
-Don't be shy about asking questions - I'm always excited to help people get involved with the project!
-
-## Bug Reports and Feature Requests
-
-Found a bug? Have a cool idea? Awesome! When you create an issue, try to include:
-- What you were trying to do
-- What actually happened
-- Any error messages or unexpected behavior
-- Ideas for how to fix/implement it
-
-The more context you provide, the easier it is for me (and the AI) to help out!
-
-## Code Style
-
-I try to keep things consistent but not overly rigid:
-- Use 2 spaces for indentation
-- Follow the existing code style when possible
-- Run `npm run lint` before submitting PRs
-- Add comments for anything non-obvious
-
-## The Most Important Thing
-
-Have fun with it! This project is all about exploring what's possible when humans and AI work together to build software. Your contributions are helping push that boundary forward.
-
-Thanks for being part of this experiment in AI-assisted development! 🚀 
+By contributing you agree that your contributions are licensed under the MIT License
+([LICENSE.txt](LICENSE.txt)).

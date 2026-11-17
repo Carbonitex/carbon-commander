@@ -1,0 +1,8 @@
+{
+  // Unit + end-to-end tests: the extension sources plus Node (test servers, Playwright).
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["chrome", "node"]
+  },
+  "include": ["../src", "."]
+}

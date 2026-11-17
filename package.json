@@ -1,23 +1,26 @@
 {
   "name": "carboncommander",
-  "version": "0.3.0",
-  "main": "src/carbon-commander.js",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "A command bar for Chrome that talks to an AI agent: page tools, browser tools and MCP servers.",
   "scripts": {
-    "test": "echo \"true\"",
-    "test2": "npm run test:build && node tests/server.js",
-    "test2:build": "webpack --config tests/webpack.test.config.js",
-    "test2:watch": "nodemon tests/server.js",
-    "build": "webpack --config webpack.config.js",
-    "lint": "echo \"Add your preferred linter configuration\"",
-    "prepare": "npm run build",
-    "version": "npm run build && git add -A . && git add dist -f",
-    "postversion": "echo \"Ready to push! Review and then run: git push && git push --tags",
-    "start": "webpack serve --config webpack.config.js",
-    "watch": "webpack --watch --config webpack.config.js"
+    "build": "node scripts/build.mjs",
+    "build:prod": "node scripts/build.mjs --prod",
+    "watch": "node scripts/build.mjs --watch",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tests",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "node scripts/build.mjs --e2e && node scripts/build.mjs --prod --out dist-prod && playwright test -c tests/e2e",
+    "package": "node scripts/build.mjs --prod && node scripts/package.mjs",
+    "icons": "node scripts/icons.mjs",
+    "check": "npm run typecheck && npm run lint && npm test && npm run build",
+    "version": "node scripts/sync-version.mjs && git add src/manifest.json",
+    "postversion": "echo \"Ready to push. Review, then run: git push && git push --tags\""
   },
   "author": "Carbonitex [Matt]",
-  "license": "LGPL-3.0",
-  "description": "A command palette interface for quick actions",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/carbonitex/carbon-commander.git"
@@ -35,20 +38,23 @@
   },
   "homepage": "https://github.com/carbonitex/carbon-commander#readme",
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=22.13.0"
   },
   "dependencies": {
-    "marked": "^15.0.6"
+    "dompurify": "^3.4.18",
+    "marked": "^18.2.1"
   },
   "devDependencies": {
-    "archiver": "^7.0.1",
-    "copy-webpack-plugin": "^12.0.2",
-    "css-loader": "^7.1.2",
-    "fs-extra": "^11.3.0",
-    "style-loader": "^4.0.0",
-    "terser-webpack-plugin": "^5.3.11",
-    "webpack": "^5.97.1",
-    "webpack-cli": "^5.1.4",
-    "webpack-dev-server": "^5.2.0"
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.65.1",
+    "@types/chrome": "^0.3.7",
+    "@types/node": "^22.20.5",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "jsdom": "^31.0.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.73.0",
+    "vitest": "^5.1.0"
   }
 }
