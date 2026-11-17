@@ -203,7 +203,9 @@ test('opens the overlay and completes first-run setup with a custom endpoint', a
   expect(pageView).toEqual({ host: true, shadow: null, iframes: 0, frames: 0 });
 
   // The console-error collector sees the bar and the worker (probe it, then forget the probes).
-  await bar.evaluate(() => console.error('cc-e2e-probe-bar'));
+  // Logged by the bar's own script (e2e build hook): a message from evaluated code carries no
+  // script URL on Linux, so it would not count as coming from the extension.
+  await bar.evaluate(() => (globalThis as unknown as { __ccProbeConsole(text: string): void }).__ccProbeConsole('cc-e2e-probe-bar'));
   await (await serviceWorker()).evaluate(() => console.error('cc-e2e-probe-worker'));
   await expect.poll(() => extensionErrors.filter((e) => e.includes('cc-e2e-probe')).length).toBe(2);
   extensionErrors.splice(0, extensionErrors.length, ...extensionErrors.filter((e) => !e.includes('cc-e2e-probe')));

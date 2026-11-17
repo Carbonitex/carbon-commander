@@ -18,6 +18,15 @@ import { isHostInitMessage, type BarClaimMessage } from '../shared/protocol';
 const HANDSHAKE_TIMEOUT_MS = 8_000;
 const MAX_CLAIM_ATTEMPTS = 5;
 
+// End-to-end test hook: lets the suite check that its console collector sees errors logged by the
+// bar's own script. `__E2E__` is false in every other build, so this is dropped.
+if (__E2E__) {
+  (globalThis as unknown as { __ccProbeConsole(text: string): void }).__ccProbeConsole = (text) => {
+    // eslint-disable-next-line no-console -- the probe has to reach the real console
+    console.error(text);
+  };
+}
+
 function pickEnv(): UiEnv {
   const params = new URLSearchParams(location.search);
   // `__DEV__` is a build-time constant: in production the mock branch (and module) is dropped.
