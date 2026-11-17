@@ -207,7 +207,8 @@ test('opens the overlay and completes first-run setup with a custom endpoint', a
   // script URL on Linux, so it would not count as coming from the extension.
   await bar.evaluate(() => (globalThis as unknown as { __ccProbeConsole(text: string): void }).__ccProbeConsole('cc-e2e-probe-bar'));
   await (await serviceWorker()).evaluate(() => console.error('cc-e2e-probe-worker'));
-  await expect.poll(() => extensionErrors.filter((e) => e.includes('cc-e2e-probe')).length).toBe(2);
+  // Each probe at least once: some platforms report a frame's console message more than once.
+  await expect.poll(() => ['cc-e2e-probe-bar', 'cc-e2e-probe-worker'].every((p) => extensionErrors.some((e) => e.includes(p)))).toBe(true);
   extensionErrors.splice(0, extensionErrors.length, ...extensionErrors.filter((e) => !e.includes('cc-e2e-probe')));
 
   const setup = bar.getByRole('region', { name: 'Set up a model provider' });
