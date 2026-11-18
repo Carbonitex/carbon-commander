@@ -38,6 +38,55 @@ export function onHostMessage(listener: (message: HostToFrameMessage) => void): 
   return () => listeners.delete(listener);
 }
 
+const px = (value: string): number => {
+  const n = parseFloat(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+/**
+ * The height a scroll container's content needs, in fractional CSS pixels: its in-flow children's
+ * heights with their vertical margins (adjacent ones collapse, as in block layout), plus its own
+ * padding and borders. Unlike `scrollHeight` / `clientHeight` (each rounded on its own, so their
+ * difference can be 1 when nothing overflows, or 0 when 0.4 px does) this does not depend on how
+ * tall the container currently is. Child heights, not positions: a transform on a child (an
+ * appearing item slides in) must not change the answer.
+ */
+export function contentHeight(el: HTMLElement): number {
+  const style = getComputedStyle(el);
+  let total = px(style.paddingTop) + px(style.paddingBottom) + px(style.borderTopWidth) + px(style.borderBottomWidth);
+  let previousMargin: number | null = null;
+  for (const child of el.children) {
+    const cs = getComputedStyle(child);
+    if (cs.display === 'none' || cs.position === 'absolute' || cs.position === 'fixed') continue;
+    const top = px(cs.marginTop);
+    total += child.getBoundingClientRect().height;
+    // Positive adjoining margins collapse to the larger one (the only kind the bar's CSS uses).
+    total += previousMargin === null ? top : Math.max(previousMargin, top);
+    previousMargin = px(cs.marginBottom);
+  }
+  return total + (previousMargin ?? 0);
+}
+
+/**
+ * The height the bar would take if nothing clamped it (its border box), independent of the
+ * iframe's current height. While the iframe is smaller, the bar is clamped and its scroll area
+ * shrinks: the scroll area's box is replaced by the height of its content. Once the scroll area
+ * is squeezed to nothing, the fixed parts (header, input, footer) overflow the bar itself, which
+ * is added as well (otherwise a bar opened at a small initial height would never grow).
+ *
+ * The result must not depend on the current height, or the host's resize and the next
+ * measurement can feed each other: measuring with rounded values (`offsetHeight`, `scrollHeight -
+ * clientHeight`) asked for 379 px at 378 and 378 px at 379 when the natural height was fractional,
+ * and the iframe then changed height on every frame for good.
+ */
+export function naturalHeight(bar: HTMLElement, scroller: HTMLElement | null): number {
+  const barHeight = bar.getBoundingClientRect().height;
+  if (!scroller || !bar.contains(scroller)) return barHeight + Math.max(0, bar.scrollHeight - bar.clientHeight);
+  const box = scroller.getBoundingClientRect().height;
+  const squeezed = box < 1 ? Math.max(0, bar.scrollHeight - bar.clientHeight) : 0;
+  return barHeight - box + contentHeight(scroller) + squeezed;
+}
+
 /** A height report is sent at the latest this long after it was asked for (rAF can be throttled). */
 export const RESIZE_FALLBACK_MS = 100;
 

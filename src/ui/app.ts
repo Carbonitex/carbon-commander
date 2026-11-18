@@ -13,7 +13,7 @@ import { createMcpHint } from './chat/mcp-hint';
 import { createConnection } from './connection';
 import { h } from './dom';
 import type { UiEnv } from './env';
-import { createResizeReporter, isEmbedded, onHostMessage, postToHost, type ResizeReporter } from './host';
+import { createResizeReporter, isEmbedded, naturalHeight, onHostMessage, postToHost, type ResizeReporter } from './host';
 import { createStore, isRunActive, type UiState } from './state/reducer';
 import { SettingsView, type SettingsTab } from './settings/view';
 
@@ -255,17 +255,12 @@ export async function startApp(root: HTMLElement, env: UiEnv): Promise<void> {
   });
 
   /**
-   * The height the bar needs, independent of the iframe's current height. While the iframe is
-   * smaller than the content, the bar is clamped to it: the scroll area shrinks (its hidden part
-   * is `scrollHeight - clientHeight`) and, once it is at zero, the fixed parts (header, input,
-   * footer) overflow the bar itself (`bar.scrollHeight - bar.clientHeight`). Both are added, or
-   * a bar opened at the initial 96 px with an empty conversation would measure 96 and never grow.
+   * The height the iframe needs: the bar's unclamped height (see `naturalHeight`, which must not
+   * depend on the iframe's current height) plus the body padding.
    */
   const measure = (): number => {
     const scroller = view === 'chat' ? chat.scrollEl : (settingsView?.el.querySelector<HTMLElement>('.cc-settings-body') ?? null);
-    const scrollerOverflow = scroller ? Math.max(0, scroller.scrollHeight - scroller.clientHeight) : 0;
-    const barOverflow = Math.max(0, bar.scrollHeight - bar.clientHeight);
-    return bar.offsetHeight + barOverflow + scrollerOverflow + FRAME_PADDING * 2;
+    return naturalHeight(bar, scroller) + FRAME_PADDING * 2;
   };
   const resizeObserver = embedded && typeof ResizeObserver === 'function' ? new ResizeObserver(() => report()) : null;
   resizeObserver?.observe(bar);
